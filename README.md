@@ -88,6 +88,20 @@ Customer ids are collection variables. The duplicate (409) request needs the VOI
 so run it right after "Start workflow, VOICE customer" (with the shipped 30 minute YAML there is plenty of time; with a shortened YAML, be quick).
 To rerun the collection, wait for the earlier workflows to complete first, otherwise the start requests return 409.
 
+## Load-test data
+
+`load-test/load_customers.py` (Python 3 + Docker only) loads fake customers into `orch.customers` by piping SQL into the app-postgres container.
+It is a manual operator tool like `db/*.sql`; the service never writes to the table.
+
+```bash
+python3 load-test/load_customers.py                  # 1000 customers: 400 VOICE, 600 WHATSAPP, ids L0001..L1000
+python3 load-test/load_customers.py --dry-run | head # print the SQL only
+python3 load-test/load_customers.py --clean          # delete the L* customers again
+```
+
+Options: `--count`, `--voice-pct`, `--prefix`, `--seed`, `--container`. It is idempotent. The channel is stored as `VOICE` (the column only allows `VOICE` / `WHATSAPP`).
+After loading, `POST /workflows/start-all` starts a workflow for every customer, including the six defaults.
+
 ## Phase branches
 
 | Branch | Contains |
