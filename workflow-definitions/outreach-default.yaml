@@ -1,0 +1,45 @@
+name: OUTREACH_DEFAULT
+description: Default outreach. First step depends on the customer's initial channel; then a common 30-minute wait and follow-up message.
+start: route
+
+steps:
+  # --- Step 1: derived from the customer's mode of communication (from the DB) ---
+  - id: route
+    type: switch
+    on: customer.initialChannel        # read from the workflow input, not from an activity
+    cases:
+      VOICE: voice-call
+      WHATSAPP: whatsapp-message
+    # no default: an unexpected channel fails the workflow with a clear message
+
+  - id: voice-call
+    type: activity
+    activity: executeVoiceCall
+    params:
+      script: "Hello, this is HDFC Bank. We are calling about your account."
+    next: wait-30-min
+
+  - id: whatsapp-message
+    type: activity
+    activity: sendMessage
+    params:
+      channel: WHATSAPP
+      text: "Hello from HDFC Bank. Reply here if you need any help."
+    next: wait-30-min
+
+  # --- Default path, same for every customer ---
+  - id: wait-30-min
+    type: delay
+    duration: 30m
+    next: follow-up-message
+
+  - id: follow-up-message
+    type: activity
+    activity: sendMessage
+    params:
+      channel: WHATSAPP
+      text: "Just following up. Reply here if you need any help."
+    next: end
+
+  - id: end
+    type: end
