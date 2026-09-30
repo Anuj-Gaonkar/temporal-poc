@@ -102,6 +102,22 @@ python3 load-test/load_customers.py --clean          # delete the L* customers a
 Options: `--count`, `--voice-pct`, `--prefix`, `--seed`, `--container`. It is idempotent. The channel is stored as `VOICE` (the column only allows `VOICE` / `WHATSAPP`).
 After loading, `POST /workflows/start-all` starts a workflow for every customer, including the six defaults.
 
+## Load-test report
+
+`load-test/report.py` turns the timing logs into one self-contained HTML report (hover and zoom charts, percentile table, failures). Times are shown in IST.
+
+```bash
+pip install -r load-test/requirements.txt        # pandas + plotly, once (a venv is recommended)
+python load-test/report.py logs --list-runs      # list the start-all runs in the logs
+python load-test/report.py logs --run last       # report for the last start-all run
+python load-test/report.py collected-logs/run-01 --out load-test/reports/run-01.html
+python load-test/report.py logs --since 2026-09-30T15:36 --until 2026-09-30T15:50   # IST window
+```
+
+It accepts files or folders, including rolled `.gz` logs, and mixes old UTC (`Z`) and new IST (`+05:30`) lines correctly.
+Reports go to `load-test/reports/` (git-ignored). `--theme dark` and `--cdn` (smaller file, needs internet) are available.
+A run is the window from one `API_START_ALL_RECEIVED` to the next, so keep runs apart by waiting for the workflows to finish.
+
 ## Phase branches
 
 | Branch | Contains |

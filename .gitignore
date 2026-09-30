@@ -37,3 +37,7 @@ logs/
 
 ### Local credentials (copy .env.example to .env) ###
 .env
+
+### Load-test report output and local Python env ###
+load-test/reports/
+load-test/.venv/
