@@ -54,6 +54,11 @@ sequenceDiagram
 Same as above, except: step `route` goes to `whatsapp-message`, the first activity is `sendMessage` (initial message, no voice call),
 then the same 30 minute timer, second `sendMessage`, end.
 
+## Start-all (branch `phase-1-start-all`)
+
+`POST /workflows/start-all` reads every row of `orch.customers` once, then starts `<definition>-<customerId>` for each customer in turn through the same Temporal client call as the single start.
+Running customers give `ALREADY_RUNNING` in the result; the request itself still succeeds (202).
+
 ## Failure and restart behaviour
 
 | Situation | What happens |

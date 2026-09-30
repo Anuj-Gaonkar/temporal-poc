@@ -4,6 +4,7 @@ import com.hdfc.cern.workfloworch.customer.Customer;
 import com.hdfc.cern.workfloworch.customer.CustomerRepository;
 import com.hdfc.cern.workfloworch.definition.DefinitionLoader;
 import com.hdfc.cern.workfloworch.definition.StepDefinition;
+import com.hdfc.cern.workfloworch.starter.StartAllResult;
 import com.hdfc.cern.workfloworch.starter.StartResult;
 import com.hdfc.cern.workfloworch.starter.WorkflowStarterService;
 import io.temporal.api.workflow.v1.WorkflowExecutionInfo;
@@ -52,6 +53,11 @@ public class OrchController {
 	@PostMapping("/workflows/start")
 	public ResponseEntity<StartResult> start(@RequestBody StartRequest request) {
 		return ResponseEntity.status(HttpStatus.ACCEPTED).body(starter.start(request.customerId(), request.definition()));
+	}
+
+	@PostMapping("/workflows/start-all")
+	public ResponseEntity<StartAllResult> startAll(@RequestBody StartAllRequest request) {
+		return ResponseEntity.status(HttpStatus.ACCEPTED).body(starter.startAll(request.definition()));
 	}
 
 	@GetMapping("/workflows/{workflowId}")

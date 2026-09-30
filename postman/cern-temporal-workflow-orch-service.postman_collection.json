@@ -327,6 +327,84 @@
       ]
     },
     {
+      "name": "Start workflow, all customers",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"definition\": \"{{definition}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/workflows/start-all",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "start-all"
+          ]
+        },
+        "description": "Starts the definition for every customer in orch.customers. Customers whose workflow is still running are reported as ALREADY_RUNNING, not as an error. Run it when no other workflow is running to see every customer STARTED."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 202\", function () { pm.response.to.have.status(202); });",
+              "pm.test(\"counts add up\", function () { var j = pm.response.json(); pm.expect(j.started + j.alreadyRunning + j.failed).to.eql(j.total); pm.expect(j.failed).to.eql(0); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Start workflow, all customers, unknown definition (expects 404)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"definition\": \"NO_SUCH_DEFINITION\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/workflows/start-all",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "start-all"
+          ]
+        },
+        "description": "Expects 404 DEFINITION_NOT_FOUND."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 404\", function () { pm.response.to.have.status(404); });",
+              "pm.test(\"code\", function () { pm.expect(pm.response.json().code).to.eql(\"DEFINITION_NOT_FOUND\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "Get workflow status",
       "request": {
         "method": "GET",

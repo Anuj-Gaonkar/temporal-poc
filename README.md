@@ -56,8 +56,15 @@ Container names are prefixed `cern-orch-`.
 |---|---|
 | `GET /workflow-definitions` | Loaded definitions (name, description, step ids) |
 | `POST /workflows/start` | Body `{"customerId","definition"}`. 202, or 400 / 404 `DEFINITION_NOT_FOUND` / 404 `CUSTOMER_NOT_FOUND` / 409 |
+| `POST /workflows/start-all` | Body `{"definition"}`. Starts it for **every** customer in the table, one after another; returns 202 with counts and one result per customer (`STARTED`, `ALREADY_RUNNING`, `FAILED`). 400 / 404 `DEFINITION_NOT_FOUND` |
 | `GET /workflows/{workflowId}` | Status via Temporal (RUNNING, COMPLETED, ...) |
 | `GET /customers/{customerId}` | Read-only view of the customer row |
+
+Start everyone:
+
+```bash
+curl -s -X POST localhost:8096/workflows/start-all -H 'Content-Type: application/json' -d '{"definition":"OUTREACH_DEFAULT"}'
+```
 
 Workflow id is `<definition>-<customerId>`, e.g. `OUTREACH_DEFAULT-C1001`. Starting a customer whose workflow is running returns 409.
 
@@ -87,5 +94,6 @@ To rerun the collection, wait for the earlier workflows to complete first, other
 |---|---|
 | `main` | Latest completed phase |
 | `phase-1-channel-routing` | Phase 1 (tag `phase-1-done`) |
+| `phase-1-start-all` | Phase 1 plus the ad hoc `POST /workflows/start-all` endpoint (branched from `phase-1-done`; `main` is unchanged) |
 
 Demo a phase: `git switch phase-1-channel-routing`. The repo is local only; no remote is configured.

@@ -1,5 +1,6 @@
 package com.hdfc.cern.workfloworch.customer;
 
+import java.util.List;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -27,5 +28,20 @@ public class JdbcCustomerRepository implements CustomerRepository {
 						rs.getString("phone"),
 						rs.getString("initial_channel")))
 				.optional();
+	}
+
+	@Override
+	public List<Customer> findAll() {
+		return jdbc.sql("""
+				SELECT customer_id, name, phone, initial_channel
+				FROM orch.customers
+				ORDER BY customer_id
+				""")
+				.query((rs, rowNum) -> new Customer(
+						rs.getString("customer_id"),
+						rs.getString("name"),
+						rs.getString("phone"),
+						rs.getString("initial_channel")))
+				.list();
 	}
 }

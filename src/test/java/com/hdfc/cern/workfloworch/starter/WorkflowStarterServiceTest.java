@@ -12,6 +12,7 @@ import com.hdfc.cern.workfloworch.workflow.OrchTaskQueue;
 import com.hdfc.cern.workfloworch.workflow.YamlWorkflowImpl;
 import io.temporal.testing.TestWorkflowEnvironment;
 import io.temporal.worker.Worker;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
@@ -22,9 +23,14 @@ class WorkflowStarterServiceTest {
 
 	/** Hand-written fake, test sources only. */
 	private static final class FakeCustomers implements CustomerRepository {
-		private final Map<String, Customer> rows = Map.of(
+		private final Map<String, Customer> rows = new java.util.TreeMap<>(Map.of(
 				"C1001", new Customer("C1001", "Test One", "+910000000001", "VOICE"),
-				"C1002", new Customer("C1002", "Test Two", "+910000000002", "WHATSAPP"));
+				"C1002", new Customer("C1002", "Test Two", "+910000000002", "WHATSAPP")));
+
+		@Override
+		public List<Customer> findAll() {
+			return List.copyOf(rows.values());
+		}
 
 		@Override
 		public Optional<Customer> findById(String customerId) {
@@ -89,6 +95,39 @@ class WorkflowStarterServiceTest {
 
 		assertRejected("C1001", "OUTREACH_DEFAULT", Reason.ALREADY_RUNNING, 409);
 		assertThat(starter.start("C1002", "OUTREACH_DEFAULT").workflowId()).isEqualTo("OUTREACH_DEFAULT-C1002");
+	}
+
+	@Test
+	void startAllStartsEveryCustomer() {
+		StartAllResult result = starter.startAll("OUTREACH_DEFAULT");
+
+		assertThat(result.total()).isEqualTo(2);
+		assertThat(result.started()).isEqualTo(2);
+		assertThat(result.alreadyRunning()).isZero();
+		assertThat(result.failed()).isZero();
+		assertThat(result.results()).extracting(StartAllResult.Item::workflowId)
+				.containsExactly("OUTREACH_DEFAULT-C1001", "OUTREACH_DEFAULT-C1002");
+		assertThat(result.results()).extracting(StartAllResult.Item::status).containsOnly("STARTED");
+	}
+
+	@Test
+	void startAllSkipsRunningCustomersAndStartsTheRest() {
+		starter.start("C1001", "OUTREACH_DEFAULT");
+
+		StartAllResult result = starter.startAll("OUTREACH_DEFAULT");
+
+		assertThat(result.started()).isEqualTo(1);
+		assertThat(result.alreadyRunning()).isEqualTo(1);
+		assertThat(result.results()).extracting(StartAllResult.Item::status)
+				.containsExactly("ALREADY_RUNNING", "STARTED");
+	}
+
+	@Test
+	void startAllRejectsBlankAndUnknownDefinition() {
+		assertThatThrownBy(() -> starter.startAll(" "))
+				.isInstanceOfSatisfying(StartRejectedException.class, e -> assertThat(e.reason()).isEqualTo(Reason.BAD_REQUEST));
+		assertThatThrownBy(() -> starter.startAll("NOPE"))
+				.isInstanceOfSatisfying(StartRejectedException.class, e -> assertThat(e.reason()).isEqualTo(Reason.DEFINITION_NOT_FOUND));
 	}
 
 	private void assertRejected(String customerId, String definition, Reason reason, int status) {

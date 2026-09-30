@@ -24,6 +24,14 @@
 6. `API_START_DONE`, response 202 `{workflowId, runId, customerId, initialChannel}`. The `ApiErrors` advice turns rejections into JSON bodies.
 7. A worker in the same app picks up the workflow task on `CERN_WORKFLOW_ORCH`; the workflow runs the steps. Each `activity` step schedules an activity that logs the business line.
 
+## Request flow: `POST /workflows/start-all` (branch `phase-1-start-all`)
+
+`WorkflowStarterService.startAll(definition)`: blank definition is 400, unknown is 404 `DEFINITION_NOT_FOUND`; then one `CustomerRepository.findAll()`,
+then a plain sequential loop calling the same `startWorkflow` as the single start. Per customer it logs the usual `API_START_DONE` (with `startMs` and `totalMs`, no `lookupMs`)
+or `API_START_REJECTED` (`ALREADY_RUNNING`, or `START_FAILED` with `error`); one customer failing never stops the loop. It ends with `API_START_ALL_DONE`.
+The response is 202 with `{definition, total, started, alreadyRunning, failed, results[]}`; each result has `customerId`, `initialChannel`, `status`, `workflowId`, `runId`, `reason`.
+The request runs in the HTTP thread and returns when every start call has returned, so it grows linearly with the number of customers.
+
 ## How the workflow interprets steps
 
 `YamlWorkflowImpl.interpret` keeps a step pointer: start at `definition.start`; look up the step; run it; the step returns the next id (`switch` picks from `cases`/`default`,
@@ -60,7 +68,7 @@ Override the definitions folder with `ORCH_DEFINITIONS_PATH`, DB credentials wit
 | `DurationParserTest` | `90s 30m 2h 3d` parse; `30`, `1w`, empty and other formats rejected |
 | `YamlWorkflowTest` | Time-skipping environment with the real log-only activities: VOICE order (call, message, at least 30 min apart); WHATSAPP (message, message, no call); unknown channel fails with the expected message |
 | `LogEventsTest` | line builder format |
-| `WorkflowStarterServiceTest` | 400 / 404 / 404 / 409, definition checked before customer, other customers run in parallel. Uses a hand-written fake `CustomerRepository` and the Temporal test environment |
+| `WorkflowStarterServiceTest` | 400 / 404 / 404 / 409, definition checked before customer, other customers run in parallel; start-all: everyone started, running customers skipped, blank/unknown definition. Uses a hand-written fake `CustomerRepository` and the Temporal test environment |
 
 `RecordingActivities` (test sources) wraps the real activities to record call order and workflow time. The `JdbcCustomerRepository` query is covered by the manual end-to-end run, not by a unit test.
 
@@ -73,6 +81,8 @@ INFO level (`WF_FAILED` and `ACT_FAILED` are ERROR). Names are constants in `Log
 |---|---|---|
 | `API_START_RECEIVED` | starter | `customerId`, `definition` |
 | `API_START_DONE` | starter | `workflowId`, `runId`, `customerId`, `channel`, `lookupMs`, `startMs`, `totalMs` |
+| `API_START_ALL_RECEIVED` | starter | `definition` |
+| `API_START_ALL_DONE` | starter | `definition`, `total`, `started`, `alreadyRunning`, `failed`, `lookupMs` (the one `findAll` query), `totalMs` |
 | `API_START_REJECTED` | starter | `customerId`, `definition`, `reason` (`BAD_REQUEST`, `DEFINITION_NOT_FOUND`, `CUSTOMER_NOT_FOUND`, `ALREADY_RUNNING`), `totalMs` |
 | `WF_STARTED` | workflow | `workflowId`, `customerId`, `channel`, `definition`, `startLagMs` |
 | `WF_STEP_ENTER` | workflow | `workflowId`, `stepId`, `stepType` |

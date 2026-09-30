@@ -10,6 +10,8 @@ public final class LogEvents {
 	public static final String API_START_RECEIVED = "API_START_RECEIVED";
 	public static final String API_START_DONE = "API_START_DONE";
 	public static final String API_START_REJECTED = "API_START_REJECTED";
+	public static final String API_START_ALL_RECEIVED = "API_START_ALL_RECEIVED";
+	public static final String API_START_ALL_DONE = "API_START_ALL_DONE";
 	public static final String WF_STARTED = "WF_STARTED";
 	public static final String WF_STEP_ENTER = "WF_STEP_ENTER";
 	public static final String WF_STEP_EXIT = "WF_STEP_EXIT";

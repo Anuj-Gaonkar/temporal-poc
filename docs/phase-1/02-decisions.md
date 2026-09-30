@@ -48,6 +48,10 @@ Each decision: Context, Decision, Alternatives considered, Consequences. D24 onw
 
 **D23 Workflow failure type.** Decision: workflow failures for a bad definition/customer value are non-retryable `ApplicationFailure`s (workflow fails, no endless task retries). The `WF_FAILED` line logs the original message.
 
+## Ad hoc addition (branch `phase-1-start-all`)
+
+**D31 `POST /workflows/start-all`.** Context: the owner asked, after Phase 1 was done, for a single call that triggers the workflow for every customer in the database. Decision: a new endpoint alongside `POST /workflows/start` (which stays), body `{definition}`, reading all customers with a new read-only `findAll()` and starting them sequentially. Already-running customers are reported as `ALREADY_RUNNING` and do not fail the call, so it can be re-run safely; other failures are reported per customer as `FAILED`. Alternatives: replace the single endpoint (rejected by the owner), parallel starts or a background job (deferred; sequential first). Consequences: response time grows linearly with the customer count and the whole table is loaded in memory; revisit if the load tests use thousands of customers. Delivered on its own branch from `phase-1-done` because it is outside the Phase 1 scope in the guide; `main` and `phase-1-done` are unchanged.
+
 ## Deviations from, and small additions to, the instruction guide
 
 **D24 `WorkflowInput` is nested.** The guide says `WorkflowInput` "carries `customerId`, `name`, `phone`, `initialChannel`". It is `WorkflowInput(Customer customer)`, so the field paths in the YAML (`customer.initialChannel`) map directly. The same four fields are carried.
