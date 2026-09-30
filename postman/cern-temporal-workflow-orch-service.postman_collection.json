@@ -1,0 +1,386 @@
+{
+  "info": {
+    "name": "cern-temporal-workflow-orch-service",
+    "description": "Phase 1. Run top to bottom against the running app (see README). The duplicate/409 request needs the VOICE workflow still running.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "List definitions",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/workflow-definitions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflow-definitions"
+          ]
+        },
+        "description": "Lists the loaded YAML definitions (name, description, step ids)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"OUTREACH_DEFAULT is loaded\", function () { pm.expect(pm.response.json().map(d => d.name)).to.include(pm.collectionVariables.get(\"definition\")); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get customer (VOICE customer)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/customers/{{voiceCustomerId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "customers",
+            "{{voiceCustomerId}}"
+          ]
+        },
+        "description": "Read-only view of a VOICE customer row."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"channel is VOICE\", function () { pm.expect(pm.response.json().initialChannel).to.eql(\"VOICE\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get customer (WHATSAPP customer)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/customers/{{whatsappCustomerId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "customers",
+            "{{whatsappCustomerId}}"
+          ]
+        },
+        "description": "Read-only view of a WHATSAPP customer row."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"channel is WHATSAPP\", function () { pm.expect(pm.response.json().initialChannel).to.eql(\"WHATSAPP\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Start workflow, VOICE customer",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/workflows/start",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "start"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"{{voiceCustomerId}}\",\n  \"definition\": \"{{definition}}\"\n}"
+        },
+        "description": "Starts OUTREACH_DEFAULT for a VOICE customer: call now, message after the delay. Run this before the duplicate request."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 202\", function () { pm.response.to.have.status(202); });",
+              "pm.test(\"workflow id scheme\", function () { pm.expect(pm.response.json().workflowId).to.eql(pm.collectionVariables.get(\"definition\") + \"-\" + pm.collectionVariables.get(\"voiceCustomerId\")); });\npm.collectionVariables.set(\"voiceWorkflowId\", pm.response.json().workflowId);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Start workflow, WHATSAPP customer",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/workflows/start",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "start"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"{{whatsappCustomerId}}\",\n  \"definition\": \"{{definition}}\"\n}"
+        },
+        "description": "Starts OUTREACH_DEFAULT for a WHATSAPP customer: message now, second message after the delay."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 202\", function () { pm.response.to.have.status(202); });",
+              "pm.collectionVariables.set(\"whatsappWorkflowId\", pm.response.json().workflowId);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Start workflow, duplicate (expects 409)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/workflows/start",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "start"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"{{voiceCustomerId}}\",\n  \"definition\": \"{{definition}}\"\n}"
+        },
+        "description": "Needs the VOICE workflow from the request above to still be running (true for 30 minutes with the shipped YAML). Expects 409."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 409\", function () { pm.response.to.have.status(409); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Start workflow, unknown customer (expects 404)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/workflows/start",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "start"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"{{unknownCustomerId}}\",\n  \"definition\": \"{{definition}}\"\n}"
+        },
+        "description": "Customer id that is not in orch.customers. Expects 404 CUSTOMER_NOT_FOUND."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 404\", function () { pm.response.to.have.status(404); });",
+              "pm.test(\"code\", function () { pm.expect(pm.response.json().code).to.eql(\"CUSTOMER_NOT_FOUND\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Start workflow, unknown definition (expects 404)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/workflows/start",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "start"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"{{voiceCustomerId}}\",\n  \"definition\": \"NO_SUCH_DEFINITION\"\n}"
+        },
+        "description": "Definition name that is not loaded. Expects 404 DEFINITION_NOT_FOUND."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 404\", function () { pm.response.to.have.status(404); });",
+              "pm.test(\"code\", function () { pm.expect(pm.response.json().code).to.eql(\"DEFINITION_NOT_FOUND\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Start workflow, blank customerId (expects 400)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/workflows/start",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "start"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"\",\n  \"definition\": \"{{definition}}\"\n}"
+        },
+        "description": "Blank customerId. Expects 400 BAD_REQUEST."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 400\", function () { pm.response.to.have.status(400); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get workflow status",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/workflows/{{voiceWorkflowId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "{{voiceWorkflowId}}"
+          ]
+        },
+        "description": "Status of the VOICE workflow via describeWorkflowExecution: RUNNING while sleeping, COMPLETED after the delay."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"has a status\", function () { pm.expect(pm.response.json().status).to.be.oneOf([\"RUNNING\",\"COMPLETED\"]); });"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "definition",
+      "value": "OUTREACH_DEFAULT"
+    },
+    {
+      "key": "voiceCustomerId",
+      "value": "C1001"
+    },
+    {
+      "key": "whatsappCustomerId",
+      "value": "C1002"
+    },
+    {
+      "key": "unknownCustomerId",
+      "value": "C0000"
+    },
+    {
+      "key": "voiceWorkflowId",
+      "value": "OUTREACH_DEFAULT-C1001"
+    },
+    {
+      "key": "whatsappWorkflowId",
+      "value": "OUTREACH_DEFAULT-C1002"
+    }
+  ]
+}
