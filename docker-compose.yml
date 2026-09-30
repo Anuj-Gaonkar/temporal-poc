@@ -1,0 +1,74 @@
+name: cern-temporal-workflow-orch
+
+# Local infra for cern-temporal-workflow-orch-service. Host ports differ on purpose from the root
+# Chat-Bot-V3 stack (7233 / 8088) so both stacks can run at the same time:
+#   Temporal gRPC  -> localhost:7234
+#   Temporal UI    -> http://localhost:8089
+#   App Postgres   -> localhost:5435 (database cern_workflow_orch)
+# Temporal's own Postgres is not published to the host.
+# No init scripts are mounted: db/01_schema.sql and db/02_default_customers.sql are run by hand (see README).
+services:
+
+  # --- Temporal server + its own, fully separate Postgres (never shared with app data) ---
+  temporal-postgres:
+    image: postgres:16
+    container_name: cern-orch-temporal-postgres
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+    volumes:
+      - temporal-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  temporal:
+    image: temporalio/auto-setup:1.24.2
+    container_name: cern-orch-temporal
+    depends_on:
+      temporal-postgres:
+        condition: service_healthy
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: temporal
+      POSTGRES_SEEDS: temporal-postgres
+      DEFAULT_NAMESPACE: default
+    ports:
+      - "7234:7233" # gRPC frontend - what the app's client/worker connects to
+
+  temporal-ui:
+    image: temporalio/ui:2.31.2
+    container_name: cern-orch-temporal-ui
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8089:8080" # http://localhost:8089
+
+  # --- The service's own database (customers table) ---
+  app-postgres:
+    image: postgres:16
+    container_name: cern-orch-app-postgres
+    environment:
+      POSTGRES_DB: cern_workflow_orch
+      POSTGRES_USER: ${APP_DB_USER:-cern}
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD:-cern}
+    ports:
+      - "5435:5432"
+    volumes:
+      - app-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d cern_workflow_orch"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  temporal-postgres-data:
+  app-postgres-data:
