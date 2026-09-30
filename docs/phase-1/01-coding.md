@@ -56,7 +56,7 @@ the definition arrives as input, sleeping is `Workflow.sleep`, logging goes thro
 ## Run and debug
 
 `./mvnw spring-boot:run` (see the README for Docker and SQL). Logs: console and `logs/cern-temporal-workflow-orch-service.log`, format
-`<ISO timestamp UTC> LEVEL [thread] logger [wf=<workflowId> cust=<customerId>] - message`. The MDC ids are set in API and activity code only
+`<ISO timestamp IST, e.g. 2026-09-30T15:06:12.894+05:30> LEVEL [thread] logger [wf=<workflowId> cust=<customerId>] - message`. The MDC ids are set in API and activity code only
 (workflow threads log ids as fields instead). The Temporal UI at http://localhost:8089 shows each workflow's history and its timers.
 Override the definitions folder with `ORCH_DEFINITIONS_PATH`, DB credentials with `APP_DB_USER` / `APP_DB_PASSWORD`.
 

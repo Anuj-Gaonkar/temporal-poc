@@ -26,12 +26,12 @@ orch:
   # Folder of *.yaml workflow definitions, read once at startup (no hot reload in Phase 1).
   definitions-path: ${ORCH_DEFINITIONS_PATH:./workflow-definitions}
 
-# ISO-8601 timestamp with milliseconds in UTC, thread, logger, and the MDC ids set by API/activity code.
+# ISO-8601 timestamp with milliseconds in IST (+05:30), thread, logger, and the MDC ids set by API/activity code.
 # Console and rolling file use the same pattern so the load scripts can parse either.
 logging:
   pattern:
-    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX,UTC} %-5level [%thread] %logger{36} [wf=%X{workflowId:-} cust=%X{customerId:-}] - %msg%n"
-    file: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX,UTC} %-5level [%thread] %logger{36} [wf=%X{workflowId:-} cust=%X{customerId:-}] - %msg%n"
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX,Asia/Kolkata} %-5level [%thread] %logger{36} [wf=%X{workflowId:-} cust=%X{customerId:-}] - %msg%n"
+    file: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX,Asia/Kolkata} %-5level [%thread] %logger{36} [wf=%X{workflowId:-} cust=%X{customerId:-}] - %msg%n"
   file:
     name: logs/cern-temporal-workflow-orch-service.log
   logback:

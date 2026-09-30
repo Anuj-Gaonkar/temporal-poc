@@ -40,7 +40,7 @@ Each decision: Context, Decision, Alternatives considered, Consequences. D24 onw
 
 **D19 Package layout.** Decision: the layout suggested in the guide, base package `com.hdfc.cern.workfloworch`. Siblings use underscore package names (`com.hdfc.yaml_workflow_engine_service`), but the owner confirmed the given package. No layout changes were needed except that `api` also holds `NotFoundException` and `ApiErrors`.
 
-**D20 Timing-log design.** Decision: plain SLF4J `event=NAME key=value` lines built by `LogEvents.line`, UTC millisecond ISO timestamps, MDC `workflowId`/`customerId` in the pattern, console plus rolling file `logs/` (10MB, 7 days). Workflow lines use `Workflow.getLogger` guarded by `!isReplaying`, times from `Workflow.currentTimeMillis()`. `startLagMs` uses `WorkflowInfo.getRunStartedTimestampMillis()`.
+**D20 Timing-log design.** Decision: plain SLF4J `event=NAME key=value` lines built by `LogEvents.line`, millisecond ISO timestamps (originally UTC, changed to IST by D32), MDC `workflowId`/`customerId` in the pattern, console plus rolling file `logs/` (10MB, 7 days). Workflow lines use `Workflow.getLogger` guarded by `!isReplaying`, times from `Workflow.currentTimeMillis()`. `startLagMs` uses `WorkflowInfo.getRunStartedTimestampMillis()`.
 
 **D21 JVM timezone.** Decision: `TimeZone.setDefault(UTC)` in `main`, as `temporal-workflow-service` does (the sibling engine maps deprecated aliases instead; forcing UTC also matches the UTC log pattern).
 
@@ -67,3 +67,5 @@ Each decision: Context, Decision, Alternatives considered, Consequences. D24 onw
 **D29 Attribution trailer.** The first commit carries `Co-Authored-By: Claude Opus 5.5`; the remaining commits carry `Co-Authored-By: Claude Sonnet 5.5`, because the session's attribution instruction changed part-way through. History was not rewritten.
 
 **D30 `DefinitionLoader.load()` is public.** So tests in other packages can call it without Spring.
+
+**D32 Log timestamps in IST.** Context: the guide asked for UTC log timestamps; the owner asked for IST on the branch `phase-1-start-all`, because the logs are read by people in IST. Decision: the log pattern (console and file) renders the timestamp in `Asia/Kolkata`, same ISO-8601 format with milliseconds, offset `+05:30` (for example `2026-09-30T15:06:12.894+05:30`). The JVM default timezone stays UTC (D21), so the database connection is unaffected; only the log rendering changed. Alternatives: keep UTC and convert in the report script. Consequences: the timestamps of logs written before this change (`Z` suffix) and after it (`+05:30`) are the same instants in different notation; the ISO offset makes both parse correctly (pandas `pd.to_datetime(..., utc=True)`), but do not mix files from before and after in one visual timeline without parsing the offset. Workflow-time fields (`stepMs`, `totalMs`) are durations and are unaffected. JSON API responses (`startTime`, `closeTime`) are still UTC (`Z`).
