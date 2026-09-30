@@ -60,7 +60,7 @@ then the same 30 minute timer, second `sendMessage`, end.
 |---|---|
 | App restarts during the 30 minute delay | The timer is in Temporal. The workflow is replayed when a worker comes back (replay logs nothing), the timer fires on time or late, the follow-up is sent. Verified manually: a VOICE workflow started, app killed, app restarted, workflow COMPLETED with the follow-up sent. |
 | An activity throws | Temporal retries (start-to-close 30s, max 3 attempts); `ACT_FAILED` is logged per attempt; after the last attempt the activity, and so the workflow, fails and `WF_FAILED` is logged. Not exercised by the log-only activities. |
-| App Postgres down at start time | `CustomerRepository` throws; the start request fails with a 500 and no workflow is started. Running workflows are unaffected (they never touch the DB). |
+| App Postgres down at start time | `CustomerRepository` throws; the start request errors (expected HTTP 500 from Spring's default handling; not exercised) and no workflow is started. Running workflows are unaffected (they never touch the DB). |
 | Temporal down at start time | The start call fails; the request errors (no workflow). |
 | Same customer started twice | Second start returns 409 while the first is running. |
 | Bad channel value in the DB | The table's CHECK constraint prevents it; if a definition had no matching case, the workflow fails with `No case for ...`. |
