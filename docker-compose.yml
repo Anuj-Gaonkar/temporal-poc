@@ -5,7 +5,8 @@ name: cern-temporal-workflow-orch
 #   Temporal gRPC  -> localhost:7234
 #   Temporal UI    -> http://localhost:8089
 #   App Postgres   -> localhost:5435 (database cern_workflow_orch)
-# Temporal's own Postgres is not published to the host.
+# Temporal's own Postgres is published on localhost only (127.0.0.1:5436) so a DB client such as DBeaver
+# can inspect it; nothing else needs that port.
 # No init scripts are mounted: db/01_schema.sql and db/02_default_customers.sql are run by hand (see README).
 services:
 
@@ -16,6 +17,8 @@ services:
     environment:
       POSTGRES_USER: temporal
       POSTGRES_PASSWORD: temporal
+    ports:
+      - "127.0.0.1:5436:5432" # inspection only (DBeaver); Temporal itself uses the internal network
     volumes:
       - temporal-postgres-data:/var/lib/postgresql/data
     healthcheck:

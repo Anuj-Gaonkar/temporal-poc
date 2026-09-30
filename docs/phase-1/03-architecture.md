@@ -15,7 +15,7 @@ flowchart LR
   repo -->|localhost:5435| appdb[(app-postgres<br/>cern_workflow_orch.orch.customers)]
   tclient -->|gRPC localhost:7234| temporal[Temporal server]
   worker -->|gRPC, polls| temporal
-  temporal --> tdb[(temporal-postgres<br/>internal only)]
+  temporal --> tdb[(temporal-postgres<br/>localhost:5436 for inspection)]
   ui[Temporal UI :8089] --> temporal
   yaml[workflow-definitions/*.yaml] -.read once at startup.-> defs
 ```

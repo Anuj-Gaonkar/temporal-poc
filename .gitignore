@@ -41,3 +41,5 @@ logs/
 ### Load-test report output and local Python env ###
 load-test/reports/
 load-test/.venv/
+.venv/
+load-test/snapshots/

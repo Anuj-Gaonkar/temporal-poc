@@ -46,9 +46,23 @@ Stop: `Ctrl+C` the app, then `docker compose down` (add `-v` only if you want to
 | Temporal gRPC | 7234 | 7233 |
 | Temporal UI | 8089 | 8088 |
 | App Postgres | 5435 | (5434 is the shared chatbot Postgres) |
+| Temporal Postgres (inspection only, localhost only) | 5436 | |
 | App HTTP | 8096 | |
 
 Container names are prefixed `cern-orch-`.
+
+## Inspecting the databases with DBeaver
+
+New connection, type PostgreSQL:
+
+| | App database (customers) | Temporal database (workflow state, history, timers) | Temporal visibility (what the UI lists) |
+|---|---|---|---|
+| Host / port | `localhost` / `5435` | `localhost` / `5436` | `localhost` / `5436` |
+| Database | `cern_workflow_orch` | `temporal` | `temporal_visibility` |
+| User / password | `cern` / `cern` (or your `.env`) | `temporal` / `temporal` | `temporal` / `temporal` |
+
+Port 5436 is bound to `127.0.0.1` only. Tick "Read-only connection" in DBeaver (Edit Connection, General, Security) so the Temporal data cannot be changed by accident.
+Tables are in schema `public`. If you rerun `docker compose up -d` after pulling this change, only `temporal-postgres` is recreated; its data volume is kept.
 
 ## API
 
@@ -98,6 +112,8 @@ python3 load-test/load_customers.py                  # 1000 customers: 400 VOICE
 python3 load-test/load_customers.py --dry-run | head # print the SQL only
 python3 load-test/load_customers.py --clean          # delete the L* customers again
 ```
+
+Temporal database growth: `python3 load-test/temporal_db_stats.py snapshot before`, run the load, `snapshot after`, then `diff before after` (rows and bytes per table). `watch --interval 5` samples growth over time into a CSV. Read-only; needs Docker only.
 
 Options: `--count`, `--voice-pct`, `--prefix`, `--seed`, `--container`. It is idempotent. The channel is stored as `VOICE` (the column only allows `VOICE` / `WHATSAPP`).
 After loading, `POST /workflows/start-all` starts a workflow for every customer, including the six defaults.
