@@ -214,13 +214,29 @@ class YamlWorkflowTest {
 	}
 
 	@Test
-	void withNeverAnyFeedbackTheCustomerIsContactedEveryDayUntilDayFifteenAndNeverAfter() {
+	void customerWhoNeverAnswersGetsTwoRetriesThenOneFinalSmsAndTheWorkflowCompletes() {
 		start(VOICE);
-		finish();
+		finish(); // nobody ever answers
 
-		assertThat(activities.calls).hasSize(15);
+		assertThat(activities.calls).extracting(RecordingActivities.Call::channel)
+				.containsExactly("VOICE", "VOICE", "VOICE", "SMS");
+		// first contact Day 1, retries Day 2 and Day 3, final SMS Day 4, all at 10:00
 		assertThat(dayOf(activities.calls.get(0))).isEqualTo(day0().plusDays(1));
-		assertThat(dayOf(activities.calls.get(14))).isEqualTo(day0().plusDays(15));
+		assertThat(dayOf(activities.calls.get(3))).isEqualTo(day0().plusDays(4));
+		assertThat(hourOf(activities.calls.get(3))).isEqualTo(10);
+	}
+
+	@Test
+	void answeringARetryStartsTheUnansweredCountAgain() {
+		YamlWorkflow wf = start(WHATSAPP);
+		awaitContacts(2); // first contact and one retry, both unanswered (count 2)
+		send(wf, "INCONCLUSIVE", null, null); // a reaction: the count starts again
+		awaitContacts(3); // follow-up
+		awaitContacts(4); // retry after the follow-up: still a normal contact, not the final SMS
+		assertThat(activities.calls).extracting(RecordingActivities.Call::channel).containsOnly("WHATSAPP");
+
+		send(wf, "POSITIVE", null, null);
+		finish();
 	}
 
 	@Test

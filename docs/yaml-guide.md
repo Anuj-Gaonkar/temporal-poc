@@ -137,8 +137,9 @@ wait-day-1 (delay untilDay 1) -> first-contact (contact on customer.initialChann
    REMIND_LATER -> reset-reminders -> wait-reminder (delay fromVar reminder.after, default 1d) -> reminder-contact (channel reminder.channel, default DB channel) -> await-reminder
                        await-reminder -> route-reminder: POSITIVE -> thank-you | REMIND_LATER -> reset-reminders | INCONCLUSIVE -> reset + wait-follow-up
                                          NO_RESPONSE -> count-unanswered-reminder: 1st -> wait-reminder (same time, same channel); 2nd in a row -> wait-final-reminder -> final-reminder (SMS) -> end
-   INCONCLUSIVE -> wait-follow-up (1d) -> follow-up-contact (channel last.channel) -> await-first
-   NO_RESPONSE  -> wait-retry (1d) -> retry-contact (DB channel) -> await-first
+   INCONCLUSIVE -> reset-reminders-inconclusive -> wait-follow-up (1d) -> follow-up-contact (channel last.channel) -> await-first
+   NO_RESPONSE  -> count-unanswered-contact: 1st and 2nd -> wait-retry (1d) -> retry-contact (DB channel) -> await-first
+                                              3rd in a row -> wait-final-contact (1d) -> final-reminder (SMS) -> end
 ```
 
 Loops are fine; the campaign window ends them (and the workflow stops after 500 transitions as a safety net).
@@ -149,6 +150,7 @@ Loops are fine; the campaign window ends them (and the workflow stops after 500 
 - Writing `duration: 30` or `30 minutes` (use `30m`).
 - Lower-case channel in `cases` (`voice:`): matching is case-sensitive; the database stores `VOICE` / `WHATSAPP`. (Feedback sent to the API is upper-cased for you.)
 - Giving a `delay` both `duration` and `untilDay`, or `fromVar` without `defaultDuration`.
+- Forgetting that the `unanswered` counter is shared: any reaction resets it; contacts with no answer in a row count on both paths (limit 3 after the first contact, 2 after a reminder).
 - Expecting a reminder "in 20 days" to be sent: it is beyond the window and the workflow ends instead.
 - Sending feedback when no contact is waiting for it (for example between two reminders): it is accepted (202) and then dropped; send it after the contact it answers.
 - Leaving `dayLength` in the shipped file after a demo.

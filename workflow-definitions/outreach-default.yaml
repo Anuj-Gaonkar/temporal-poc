@@ -35,8 +35,8 @@ steps:
     cases:
       POSITIVE: thank-you
       REMIND_LATER: reset-reminders
-      INCONCLUSIVE: wait-follow-up
-      NO_RESPONSE: wait-retry
+      INCONCLUSIVE: reset-reminders-inconclusive
+      NO_RESPONSE: count-unanswered-contact
 
   # --- Positive: thank-you SMS, then done ---
   - id: thank-you
@@ -45,7 +45,20 @@ steps:
     text: "Thank you from HDFC Bank. We have noted that you will complete the process."
     next: end
 
-  # --- No response: try again on the DB channel (repeats every day until the window closes) ---
+  # --- No response: try again on the DB channel. The first contact plus 2 unanswered retries (3 contacts with no
+  # answer in a row) end the campaign with one final SMS. Any reaction from the customer resets the count. ---
+  - id: count-unanswered-contact
+    type: count
+    counter: unanswered
+    limit: 3
+    whenReached: wait-final-contact
+    next: wait-retry
+
+  - id: wait-final-contact
+    type: delay
+    duration: 1d
+    next: final-reminder
+
   - id: wait-retry
     type: delay
     duration: 1d
@@ -99,23 +112,24 @@ steps:
       INCONCLUSIVE: reset-reminders-inconclusive
       NO_RESPONSE: count-unanswered-reminder
 
-  # The customer reacted to a reminder (asked again, or answered): the count of unanswered reminders starts again.
+  # The customer reacted (asked for a reminder, or answered): the count of unanswered contacts starts again.
   - id: reset-reminders
     type: count
-    counter: unansweredReminders
+    counter: unanswered
     reset: true
     next: wait-reminder
 
   - id: reset-reminders-inconclusive
     type: count
-    counter: unansweredReminders
+    counter: unanswered
     reset: true
     next: wait-follow-up
 
   # An unanswered reminder. After 2 in a row: one more wait (same time as the reminders), one final SMS reminder, done.
+  # (`unanswered` counts contacts with no answer in a row, on both paths.)
   - id: count-unanswered-reminder
     type: count
-    counter: unansweredReminders
+    counter: unanswered
     limit: 2
     whenReached: wait-final-reminder
     next: wait-reminder

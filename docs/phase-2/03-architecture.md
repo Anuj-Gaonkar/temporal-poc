@@ -39,6 +39,15 @@ Day 5  reminder 2 (WHATSAPP) -> no feedback in 2h -> count = 2 = limit -> wait 2
 Day 7  final reminder (SMS) -> end (COMPLETED)
 ```
 
+## Sequence: a customer who never answers at all
+
+```
+Day 1  first contact (DB channel) -> no feedback in 2h -> unanswered = 1 -> wait 1d
+Day 2  retry -> no feedback -> unanswered = 2 -> wait 1d
+Day 3  retry -> no feedback -> unanswered = 3 = limit -> wait 1d
+Day 4  final SMS -> end (COMPLETED)
+```
+
 ## Sequence: positive feedback
 
 ```

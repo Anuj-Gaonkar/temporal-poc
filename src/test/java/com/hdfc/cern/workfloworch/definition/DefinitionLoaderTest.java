@@ -24,7 +24,7 @@ class DefinitionLoaderTest {
 		assertThat(def.getCampaign().getMaxDays()).isEqualTo(15);
 		assertThat(def.getSteps()).extracting(StepDefinition::getId).contains(
 				"wait-day-1", "first-contact", "await-first", "route-first", "thank-you", "wait-reminder",
-				"count-unanswered-reminder", "final-reminder", "end");
+				"count-unanswered-contact", "count-unanswered-reminder", "final-reminder", "end");
 	}
 
 	@Test
@@ -68,8 +68,7 @@ class DefinitionLoaderTest {
 
 	@Test
 	void caseThatIsNotAFeedbackTypeFails() throws IOException {
-		assertInvalid(valid().replace("INCONCLUSIVE: wait-follow-up\n      NO_RESPONSE: wait-retry",
-				"MAYBE: wait-follow-up\n      NO_RESPONSE: wait-retry"), "case 'MAYBE' is not a feedback type");
+		assertInvalid(valid().replaceFirst("INCONCLUSIVE:", "MAYBE:"), "case 'MAYBE' is not a feedback type");
 	}
 
 	@Test
@@ -77,7 +76,7 @@ class DefinitionLoaderTest {
 		assertInvalid(valid().replace("    limit: 2\n", ""), "count needs 'reset: true' or a 'limit' of at least 1");
 		assertInvalid(valid().replace("    whenReached: wait-final-reminder\n", ""), "needs 'whenReached'");
 		assertInvalid(valid().replace("whenReached: wait-final-reminder", "whenReached: nowhere"), "whenReached points to unknown step 'nowhere'");
-		assertInvalid(valid().replace("    counter: unansweredReminders\n    limit: 2", "    limit: 2"), "count needs 'counter'");
+		assertInvalid(valid().replace("    counter: unanswered\n    limit: 2", "    limit: 2"), "count needs 'counter'");
 	}
 
 	@Test

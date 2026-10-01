@@ -26,6 +26,7 @@ Day 1  first contact at 10:00 IST, on the channel stored in the DB
             POSITIVE      -> thank-you SMS -> end
             REMIND_LATER  -> wait (customer's time, default 1d) -> contact (customer's channel, default DB channel) -> await feedback
             NO_RESPONSE   -> wait 1d -> contact on the DB channel -> await feedback          (also what a timeout becomes)
+                             first contact + 2 unanswered retries -> wait 1d -> 1 final SMS -> end (D52)
             INCONCLUSIVE  -> wait 1d -> contact on the channel of the last contact -> await feedback
        reminder not answered -> remind again after the same time on the same channel
 Reminders: after 2 unanswered ones in a row -> wait the reminder interval -> 1 final SMS reminder -> end (D51)
@@ -62,7 +63,7 @@ All the numbers (15 days, 10:00, 2h, the 1 day defaults) live in the YAML, not i
 - A wait in whole days (`1d`, `2d`) lands on `sendHour` of the target day. Any other wait (`2h`) is exact.
 - `contact` and `activity` steps check the window again before sending, so nothing is ever sent after the deadline even if a step was reached late.
 - An `await-feedback` is never longer than the time left in the window; if the window closes first, the workflow ends instead of counting a NO_RESPONSE.
-- No retry cap: the window is the cap. A customer who never answers is contacted on each of Day 1 .. Day 15 (15 contacts).
+- Caps (D51, D52): a customer who never answers gets the first contact, 2 retries and 1 final SMS (Day 1 .. Day 4), then the workflow completes. After 2 unanswered reminders, 1 final SMS and complete. The window is the outer bound.
 
 Demo and load-test aid: `campaign.dayLength: 2m` makes one "day" last 2 minutes (see decision D40). Leave it out for real days.
 
