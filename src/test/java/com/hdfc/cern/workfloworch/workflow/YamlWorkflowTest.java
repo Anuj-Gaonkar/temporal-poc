@@ -111,6 +111,34 @@ class YamlWorkflowTest {
 	}
 
 	@Test
+	void afterTwoUnansweredRemindersOneFinalSmsIsSentAndTheWorkflowCompletes() {
+		YamlWorkflow wf = start(VOICE);
+		awaitContacts(1);
+		send(wf, "REMIND_LATER", "2d", "WHATSAPP");
+		finish(); // nobody answers any reminder
+
+		assertThat(activities.calls).extracting(RecordingActivities.Call::channel)
+				.containsExactly("VOICE", "WHATSAPP", "WHATSAPP", "SMS");
+		// the final SMS comes after the same reminder gap, on Day 7 (Day 1 + 3 x 2 days)
+		assertThat(dayOf(activities.calls.get(3))).isEqualTo(dayOf(activities.calls.get(0)).plusDays(6));
+	}
+
+	@Test
+	void answeringAReminderStartsTheUnansweredCountAgain() {
+		YamlWorkflow wf = start(VOICE);
+		awaitContacts(1);
+		send(wf, "REMIND_LATER", "1d", "WHATSAPP");
+		awaitContacts(2); // reminder 1, unanswered (count 1)
+		awaitContacts(3); // reminder 2
+		send(wf, "REMIND_LATER", "1d", "WHATSAPP"); // answered: count starts again instead of ending
+		awaitContacts(4); // reminder 3 is still a normal reminder, not the final SMS
+		assertThat(activities.calls.get(3).channel()).isEqualTo("WHATSAPP");
+
+		send(wf, "POSITIVE", null, null);
+		finish();
+	}
+
+	@Test
 	void reminderWithoutDetailsDefaultsToOneDayOnTheDatabaseChannel() {
 		YamlWorkflow wf = start(WHATSAPP);
 		awaitContacts(1);

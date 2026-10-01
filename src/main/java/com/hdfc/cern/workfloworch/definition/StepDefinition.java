@@ -12,6 +12,7 @@ import lombok.Data;
  *   <li>delay: one of duration, fromVar (+ defaultDuration) or untilDay; next</li>
  *   <li>contact: channel, defaultChannel, text, next</li>
  *   <li>await-feedback: timeout, next</li>
+ *   <li>count: counter, then either reset (+ next) or limit, whenReached, next</li>
  *   <li>end: nothing</li>
  * </ul>
  */
@@ -23,6 +24,7 @@ public class StepDefinition {
 	public static final String DELAY = "delay";
 	public static final String CONTACT = "contact";
 	public static final String AWAIT_FEEDBACK = "await-feedback";
+	public static final String COUNT = "count";
 	public static final String END = "end";
 
 	private String id;
@@ -58,6 +60,13 @@ public class StepDefinition {
 	// await-feedback: how long to wait for the customer's feedback before it counts as NO_RESPONSE
 	private String timeout;
 
-	// activity, delay, contact and await-feedback
+	// count: a named counter kept for the run. reset: true sets it to 0; otherwise it is increased by 1 and,
+	// when it has reached `limit`, the workflow goes to `whenReached` instead of `next`.
+	private String counter;
+	private Boolean reset;
+	private Integer limit;
+	private String whenReached;
+
+	// activity, delay, contact, await-feedback and count
 	private String next;
 }

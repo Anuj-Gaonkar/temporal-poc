@@ -22,6 +22,7 @@ public final class LogEvents {
 	public static final String API_FEEDBACK_REJECTED = "API_FEEDBACK_REJECTED";
 	public static final String WF_FEEDBACK = "WF_FEEDBACK";
 	public static final String WF_FEEDBACK_DROPPED = "WF_FEEDBACK_DROPPED";
+	public static final String WF_COUNTER = "WF_COUNTER";
 	public static final String WF_WINDOW_EXPIRED = "WF_WINDOW_EXPIRED";
 	public static final String ACT_START = "ACT_START";
 	public static final String ACT_DONE = "ACT_DONE";

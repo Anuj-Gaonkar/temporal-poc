@@ -61,6 +61,8 @@ public class YamlWorkflowImpl implements YamlWorkflow {
 	/** Channels of the contacts made so far, for the one-line campaign summary. */
 	private final java.util.List<String> contactChannels = new java.util.ArrayList<>();
 	private boolean windowExpired;
+	/** Named counters of the run (see the count step); a counter that was never touched is 0. */
+	private final Map<String, Integer> counters = new HashMap<>();
 
 	@Override
 	public void feedback(FeedbackSignal signal) {
@@ -187,11 +189,29 @@ public class YamlWorkflowImpl implements YamlWorkflow {
 			case StepDefinition.AWAIT_FEEDBACK -> {
 				return awaitFeedback(step, customer);
 			}
+			case StepDefinition.COUNT -> {
+				return count(step);
+			}
 			case StepDefinition.END -> {
 				return null;
 			}
 			default -> throw fail("Unknown step type '" + step.getType() + "' in step '" + step.getId() + "'", "UnknownStepType");
 		}
+	}
+
+	/** reset: counter back to 0, go to next. Otherwise counter + 1; at the limit go to whenReached, else next. */
+	private String count(StepDefinition step) {
+		String workflowId = Workflow.getInfo().getWorkflowId();
+		if (Boolean.TRUE.equals(step.getReset())) {
+			counters.put(step.getCounter(), 0);
+			info(line(LogEvents.WF_COUNTER, "workflowId", workflowId, "stepId", step.getId(), "counter", step.getCounter(), "value", 0));
+			return step.getNext();
+		}
+		int value = counters.merge(step.getCounter(), 1, Integer::sum);
+		boolean reached = value >= step.getLimit();
+		info(line(LogEvents.WF_COUNTER, "workflowId", workflowId, "stepId", step.getId(), "counter", step.getCounter(),
+				"value", value, "limit", step.getLimit(), "reached", reached));
+		return reached ? step.getWhenReached() : step.getNext();
 	}
 
 	private boolean windowClosed() {

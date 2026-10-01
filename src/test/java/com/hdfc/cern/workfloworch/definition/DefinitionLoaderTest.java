@@ -23,7 +23,8 @@ class DefinitionLoaderTest {
 		assertThat(def.getStart()).isEqualTo("wait-day-1");
 		assertThat(def.getCampaign().getMaxDays()).isEqualTo(15);
 		assertThat(def.getSteps()).extracting(StepDefinition::getId).contains(
-				"wait-day-1", "first-contact", "await-first", "route-first", "thank-you", "wait-reminder", "end");
+				"wait-day-1", "first-contact", "await-first", "route-first", "thank-you", "wait-reminder",
+				"count-unanswered-reminder", "final-reminder", "end");
 	}
 
 	@Test
@@ -61,8 +62,7 @@ class DefinitionLoaderTest {
 
 	@Test
 	void danglingCaseTargetFails() throws IOException {
-		assertInvalid(valid().replace("POSITIVE: thank-you\n      REMIND_LATER: wait-reminder\n      INCONCLUSIVE: wait-follow-up\n      NO_RESPONSE: wait-retry",
-				"POSITIVE: nowhere\n      REMIND_LATER: wait-reminder\n      INCONCLUSIVE: wait-follow-up\n      NO_RESPONSE: wait-retry"),
+		assertInvalid(valid().replaceFirst("POSITIVE: thank-you", "POSITIVE: nowhere"),
 				"case 'POSITIVE' points to unknown step 'nowhere'");
 	}
 
@@ -70,6 +70,20 @@ class DefinitionLoaderTest {
 	void caseThatIsNotAFeedbackTypeFails() throws IOException {
 		assertInvalid(valid().replace("INCONCLUSIVE: wait-follow-up\n      NO_RESPONSE: wait-retry",
 				"MAYBE: wait-follow-up\n      NO_RESPONSE: wait-retry"), "case 'MAYBE' is not a feedback type");
+	}
+
+	@Test
+	void countNeedsAResetOrALimitWithATarget() throws IOException {
+		assertInvalid(valid().replace("    limit: 2\n", ""), "count needs 'reset: true' or a 'limit' of at least 1");
+		assertInvalid(valid().replace("    whenReached: wait-final-reminder\n", ""), "needs 'whenReached'");
+		assertInvalid(valid().replace("whenReached: wait-final-reminder", "whenReached: nowhere"), "whenReached points to unknown step 'nowhere'");
+		assertInvalid(valid().replace("    counter: unansweredReminders\n    limit: 2", "    limit: 2"), "count needs 'counter'");
+	}
+
+	@Test
+	void resetCountMustNotHaveALimit() throws IOException {
+		assertInvalid(valid().replace("    reset: true\n    next: wait-reminder", "    reset: true\n    limit: 3\n    next: wait-reminder"),
+				"must not have 'limit' or 'whenReached'");
 	}
 
 	@Test

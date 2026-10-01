@@ -30,7 +30,7 @@ Top level:
 | `sendHour` | no, default 10 | Hour (0-23) at which whole-day waits and `untilDay` wake up. |
 | `dayLength` | no | Demo and load tests only: one "day" lasts this long (`2m`). Leave it out for real calendar days. Never commit it in the shipped file. |
 
-Every step: `id` (required, unique) and `type` (required: `switch`, `activity`, `delay`, `contact`, `await-feedback`, `end`). Unknown fields anywhere are rejected.
+Every step: `id` (required, unique) and `type` (required: `switch`, `activity`, `delay`, `contact`, `await-feedback`, `count`, `end`). Unknown fields anywhere are rejected.
 
 | Type | Fields | Meaning |
 |---|---|---|
@@ -39,6 +39,7 @@ Every step: `id` (required, unique) and `type` (required: `switch`, `activity`, 
 | `delay` | exactly one of `duration`, `fromVar` (+ `defaultDuration`), `untilDay`; `next` (required) | A durable timer, then `next`. See "Delays". If the wake-up time is outside the campaign window the workflow ends instead of sleeping. |
 | `contact` (phase 2) | `channel` (required), `defaultChannel` (optional), `text` (required), `next` (required) | Contacts the customer. VOICE runs `executeVoiceCall` (the text is the call script); WHATSAPP and SMS run `sendMessage`. Remembers the channel as `last.channel`. Feedback that arrived before the contact started is dropped. |
 | `await-feedback` (phase 2) | `timeout` (required), `next` (required) | Waits for customer feedback up to `timeout`. Feedback becomes `feedback.type` etc.; no feedback in time becomes `feedback.type = NO_RESPONSE`. Follow it with a `switch` on `feedback.type`. |
+| `count` (phase 2) | `counter` (required name) and either `reset: true` + `next`, or `limit` + `whenReached` + `next` | A named counter for the run. `reset: true` sets it to 0 and goes to `next`. Otherwise it adds 1; once the counter has reached `limit` the workflow goes to `whenReached`, else to `next`. Used to stop after N unanswered reminders. |
 | `end` | none | Finishes the workflow normally (status COMPLETED). Never Temporal's terminate. |
 
 ### Paths: `on`, `fromVar`, `channel` (since phase 1, extended in phase 2)
@@ -108,12 +109,13 @@ Checked at startup and on every reload; a broken file reports `Invalid workflow 
 | missing name / start / steps | `'name' is required`, `'start' is required`, `'steps' is required and must not be empty` |
 | step without id or type | `every step needs an 'id'`, `step 'x': 'type' is required` |
 | duplicate step id | `duplicate step id 'x'` |
-| unknown step type | `step 'x': unknown step type 'sleep' (use switch, activity, delay, contact, await-feedback or end)` |
+| unknown step type | `step 'x': unknown step type 'sleep' (use switch, activity, delay, contact, await-feedback, count or end)` |
 | unknown activity | `step 'x': unknown activity 'fax' (known: [...])` |
 | bad duration / timeout | `step 'x': bad duration: ...`, `bad defaultDuration: ...`, `bad timeout: ...` |
 | delay with none or several of `duration` / `fromVar` / `untilDay` | `delay needs exactly one of 'duration', 'fromVar' or 'untilDay'` |
 | `fromVar` problems | `unsupported 'fromVar' 'x'`, `'fromVar' needs a 'defaultDuration' ...` |
 | `untilDay` problems | `'untilDay' must be at least 1`, `'untilDay' needs a 'campaign' block`, `'untilDay' 16 is after the campaign window (maxDays 15)` |
+| count problems | `count needs 'counter'`, `count needs 'reset: true' or a 'limit' of at least 1`, `count with a 'limit' needs 'whenReached'`, `a count with 'reset: true' must not have 'limit' or 'whenReached'`, `whenReached points to unknown step ...` |
 | contact problems | `contact needs 'channel'`, `contact needs 'text'`, `bad 'channel' 'PIGEON' (use [...] or a path: [...])` |
 | bad campaign block | `campaign: 'maxDays' must be at least 1`, `campaign: unknown 'timezone' 'x'`, `campaign: 'sendHour' must be between 0 and 23`, `campaign: bad 'dayLength': ...` |
 | `start`, `next`, case or default points nowhere | `start step 'x' does not exist`, `step 'a': next points to unknown step 'b'`, `case 'POSITIVE' points to unknown step ...` |
@@ -132,8 +134,9 @@ The file is the reference: open [`../workflow-definitions/outreach-default.yaml`
 campaign: 15 days, IST, 10:00
 wait-day-1 (delay untilDay 1) -> first-contact (contact on customer.initialChannel) -> await-first (2h) -> route-first (switch feedback.type)
    POSITIVE     -> thank-you (contact SMS) -> end
-   REMIND_LATER -> wait-reminder (delay fromVar reminder.after, default 1d) -> reminder-contact (channel reminder.channel, default DB channel) -> await-reminder
-                       await-reminder -> route-reminder: POSITIVE -> thank-you | REMIND_LATER -> wait-reminder | INCONCLUSIVE -> wait-follow-up | NO_RESPONSE -> wait-reminder (same time, same channel)
+   REMIND_LATER -> reset-reminders -> wait-reminder (delay fromVar reminder.after, default 1d) -> reminder-contact (channel reminder.channel, default DB channel) -> await-reminder
+                       await-reminder -> route-reminder: POSITIVE -> thank-you | REMIND_LATER -> reset-reminders | INCONCLUSIVE -> reset + wait-follow-up
+                                         NO_RESPONSE -> count-unanswered-reminder: 1st -> wait-reminder (same time, same channel); 2nd in a row -> wait-final-reminder -> final-reminder (SMS) -> end
    INCONCLUSIVE -> wait-follow-up (1d) -> follow-up-contact (channel last.channel) -> await-first
    NO_RESPONSE  -> wait-retry (1d) -> retry-contact (DB channel) -> await-first
 ```

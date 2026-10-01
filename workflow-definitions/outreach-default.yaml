@@ -34,7 +34,7 @@ steps:
     on: feedback.type
     cases:
       POSITIVE: thank-you
-      REMIND_LATER: wait-reminder
+      REMIND_LATER: reset-reminders
       INCONCLUSIVE: wait-follow-up
       NO_RESPONSE: wait-retry
 
@@ -83,7 +83,8 @@ steps:
     text: "This is the reminder you asked for from HDFC Bank. Please let us know how you would like to proceed."
     next: await-reminder
 
-  # No response to a reminder: remind again after the same time on the same channel the customer asked for.
+  # No response to a reminder: remind again after the same time on the same channel the customer asked for
+# (at most 2 unanswered reminders, then one final SMS reminder; see count-unanswered-reminder).
   - id: await-reminder
     type: await-feedback
     timeout: 2h
@@ -94,9 +95,42 @@ steps:
     on: feedback.type
     cases:
       POSITIVE: thank-you
-      REMIND_LATER: wait-reminder
-      INCONCLUSIVE: wait-follow-up
-      NO_RESPONSE: wait-reminder
+      REMIND_LATER: reset-reminders
+      INCONCLUSIVE: reset-reminders-inconclusive
+      NO_RESPONSE: count-unanswered-reminder
+
+  # The customer reacted to a reminder (asked again, or answered): the count of unanswered reminders starts again.
+  - id: reset-reminders
+    type: count
+    counter: unansweredReminders
+    reset: true
+    next: wait-reminder
+
+  - id: reset-reminders-inconclusive
+    type: count
+    counter: unansweredReminders
+    reset: true
+    next: wait-follow-up
+
+  # An unanswered reminder. After 2 in a row: one more wait (same time as the reminders), one final SMS reminder, done.
+  - id: count-unanswered-reminder
+    type: count
+    counter: unansweredReminders
+    limit: 2
+    whenReached: wait-final-reminder
+    next: wait-reminder
+
+  - id: wait-final-reminder
+    type: delay
+    fromVar: reminder.after
+    defaultDuration: 1d
+    next: final-reminder
+
+  - id: final-reminder
+    type: contact
+    channel: SMS
+    text: "Final reminder from HDFC Bank. We have not heard back from you. Please contact us if you would like to proceed."
+    next: end
 
   - id: end
     type: end

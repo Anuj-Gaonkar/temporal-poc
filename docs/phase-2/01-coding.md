@@ -28,6 +28,7 @@ Day 1  first contact at 10:00 IST, on the channel stored in the DB
             NO_RESPONSE   -> wait 1d -> contact on the DB channel -> await feedback          (also what a timeout becomes)
             INCONCLUSIVE  -> wait 1d -> contact on the channel of the last contact -> await feedback
        reminder not answered -> remind again after the same time on the same channel
+Reminders: after 2 unanswered ones in a row -> wait the reminder interval -> 1 final SMS reminder -> end (D51)
 Day 15 23:59 IST  last moment; anything that would happen later is dropped and the workflow ends (COMPLETED)
 ```
 
@@ -86,7 +87,7 @@ Same three places as in Phase 1 plus validation: `StepDefinition` constant and f
 |---|---|
 | `CampaignClockTest` | Day 1 = next calendar day at the send hour, window end at the end of Day 15, whole-day waits vs exact waits, `dayLength` mode. |
 | `DefinitionLoaderTest` | The shipped YAML loads; every validation message of the new step types and the `campaign` block; hot reload (valid edit goes live, broken edit keeps the old version, new file appears, unchanged folder reports nothing). |
-| `YamlWorkflowTest` | The real workflow in the time-skipping environment, with feedback sent as the same signal the REST endpoint sends: first contact on Day 1 at 10:00 by channel, POSITIVE (thank-you SMS), REMIND_LATER with and without details, re-reminder with the same time and channel, NO_RESPONSE (timeout and explicit), INCONCLUSIVE answers on the last channel, a reminder beyond Day 15 is dropped, a reminder on Day 15 is sent, never-answering customer gets exactly 15 contacts, stale feedback is dropped. |
+| `YamlWorkflowTest` | The final-SMS-after-two-unanswered-reminders rule and the count reset. The real workflow in the time-skipping environment, with feedback sent as the same signal the REST endpoint sends: first contact on Day 1 at 10:00 by channel, POSITIVE (thank-you SMS), REMIND_LATER with and without details, re-reminder with the same time and channel, NO_RESPONSE (timeout and explicit), INCONCLUSIVE answers on the last channel, a reminder beyond Day 15 is dropped, a reminder on Day 15 is sent, never-answering customer gets exactly 15 contacts, stale feedback is dropped. |
 | `FeedbackServiceTest` | Validation (400s) and the unknown-workflow 404. |
 | `WorkflowStarterServiceTest`, `LogEventsTest`, `DurationParserTest` | Unchanged from Phase 1. |
 
@@ -101,6 +102,7 @@ Test-only helper `RecordingActivities` wraps the real log-only activities and re
 | `API_FEEDBACK_REJECTED` | feedback service | `workflowId`, `reason` (`BAD_REQUEST`, `WORKFLOW_NOT_FOUND`), `totalMs` |
 | `WF_FEEDBACK` | workflow | `workflowId`, `stepId` (the await step), `type`, `remindAfter`, `channel`. Logged when feedback is taken, including a timeout (`type=NO_RESPONSE`). |
 | `WF_FEEDBACK_DROPPED` | workflow | `workflowId`, `reason` (`UNKNOWN_TYPE`, `STALE_BEFORE_CONTACT`; `BAD_REMIND_AFTER_IGNORED` and `BAD_CHANNEL_IGNORED` when only that value was ignored) and the offending value or `count` |
+| `WF_COUNTER` | workflow | `workflowId`, `stepId`, `counter`, `value`, and for a limit check `limit`, `reached` |
 | `WF_WINDOW_EXPIRED` | workflow | `workflowId`, `stepId` (the step that would have crossed the line), `deadline` (UTC instant). Followed by `WF_COMPLETED`. |
 | `DEFINITIONS_RELOADED` | reload | `count`, `changed`, `removed`, `loadMs` |
 | `DEFINITIONS_RELOAD_FAILED` | reload (WARN) | `error` |

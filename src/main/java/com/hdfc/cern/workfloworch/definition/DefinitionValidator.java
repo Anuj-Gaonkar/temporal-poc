@@ -12,7 +12,7 @@ public final class DefinitionValidator {
 
 	private static final Set<String> TYPES = Set.of(
 			StepDefinition.SWITCH, StepDefinition.ACTIVITY, StepDefinition.DELAY, StepDefinition.CONTACT,
-			StepDefinition.AWAIT_FEEDBACK, StepDefinition.END);
+			StepDefinition.AWAIT_FEEDBACK, StepDefinition.COUNT, StepDefinition.END);
 
 	private DefinitionValidator() {
 	}
@@ -86,7 +86,7 @@ public final class DefinitionValidator {
 			return;
 		}
 		if (!TYPES.contains(step.getType())) {
-			errors.add(where + "unknown step type '" + step.getType() + "' (use switch, activity, delay, contact, await-feedback or end)");
+			errors.add(where + "unknown step type '" + step.getType() + "' (use switch, activity, delay, contact, await-feedback, count or end)");
 			return;
 		}
 		switch (step.getType()) {
@@ -131,6 +131,23 @@ public final class DefinitionValidator {
 				checkChannel(where, "defaultChannel", step.getDefaultChannel(), false, errors);
 				if (isBlank(step.getText())) {
 					errors.add(where + "contact needs 'text'");
+				}
+				checkNext(where, step, byId, errors);
+			}
+			case StepDefinition.COUNT -> {
+				if (isBlank(step.getCounter())) {
+					errors.add(where + "count needs 'counter' (a name)");
+				}
+				if (Boolean.TRUE.equals(step.getReset())) {
+					if (step.getLimit() != null || step.getWhenReached() != null) {
+						errors.add(where + "a count with 'reset: true' must not have 'limit' or 'whenReached'");
+					}
+				} else if (step.getLimit() == null || step.getLimit() < 1) {
+					errors.add(where + "count needs 'reset: true' or a 'limit' of at least 1");
+				} else if (isBlank(step.getWhenReached())) {
+					errors.add(where + "count with a 'limit' needs 'whenReached' (the step to go to when the limit is reached)");
+				} else {
+					checkTarget(where + "whenReached", step.getWhenReached(), byId, errors);
 				}
 				checkNext(where, step, byId, errors);
 			}
@@ -236,7 +253,7 @@ public final class DefinitionValidator {
 			if (step.getCases() != null) {
 				todo.addAll(step.getCases().values());
 			}
-			for (String target : new String[] { step.getDefaultNext(), step.getNext() }) {
+			for (String target : new String[] { step.getDefaultNext(), step.getNext(), step.getWhenReached() }) {
 				if (!isBlank(target)) {
 					todo.add(target);
 				}

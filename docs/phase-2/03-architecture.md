@@ -30,6 +30,15 @@ Day 3   10:00  contact(WHATSAPP) -> sendMessage (log) -> await-feedback
 Day 15  a reminder that would be sent on Day 16 or later: delay target outside the window -> WF_WINDOW_EXPIRED -> workflow COMPLETED
 ```
 
+## Sequence: a customer who never answers the reminders
+
+```
+Day 1  contact(DB channel) -> feedback: REMIND_LATER 2d WHATSAPP -> count reset
+Day 3  reminder 1 (WHATSAPP) -> no feedback in 2h -> count = 1 -> wait 2d
+Day 5  reminder 2 (WHATSAPP) -> no feedback in 2h -> count = 2 = limit -> wait 2d
+Day 7  final reminder (SMS) -> end (COMPLETED)
+```
+
 ## Sequence: positive feedback
 
 ```
