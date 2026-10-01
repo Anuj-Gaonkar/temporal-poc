@@ -46,6 +46,7 @@ Watch it in the Temporal UI: http://localhost:8089 (namespace `default`, task qu
 Logs go to the console and to `logs/cern-temporal-workflow-orch-service.log`.
 The readable conversation (what we sent, what the customer replied, how the campaign ended, each with date and time) is also in `logs/conversation.log`:
 `tail -f logs/conversation.log`.
+To see only that conversation in the console and the main log (warnings and errors still show), set `orch.logging.communication-only: true` in `application.yml` (or `ORCH_LOG_COMMUNICATION_ONLY=true`) and restart. Keep it `false` for load tests, which read the `event=` lines.
 
 Default customers: `C1001`, `C1003`, `C1005` are VOICE; `C1002`, `C1004`, `C1006` are WHATSAPP.
 

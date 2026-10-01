@@ -28,6 +28,11 @@ orch:
   definitions-path: ${ORCH_DEFINITIONS_PATH:./workflow-definitions}
   definitions-hot-reload: ${ORCH_DEFINITIONS_HOT_RELOAD:true}
   definitions-reload-seconds: ${ORCH_DEFINITIONS_RELOAD_SECONDS:10}
+  logging:
+    # true = log only the readable communication lines (sent messages, customer replies, campaign summary)
+    # plus warnings and errors; hides the event=... timing lines, the framework output and the rest.
+    # Keep it false for load tests: the report script reads the event=... lines.
+    communication-only: ${ORCH_LOG_COMMUNICATION_ONLY:false}
 
 # ISO-8601 timestamp with milliseconds in IST (+05:30), thread, logger, and the MDC ids set by API/activity code.
 # Console and rolling file use the same pattern so the load scripts can parse either.

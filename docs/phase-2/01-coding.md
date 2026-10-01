@@ -126,3 +126,8 @@ They replace the Phase 1 business lines (`Voice call: customerId=..` and `Send m
 Times are IST with the date, taken from the activity clock or from workflow time (so replays do not change them), and are written only when not replaying.
 `src/main/resources/logback-spring.xml` keeps Spring Boot's console and main file appenders (patterns and rolling still come from `logging.*` in `application.yml`) and adds a second file,
 `logs/conversation.log` (10 MB / 7 days, each line is just the text above). The same lines also appear in the main log. `ConversationLogTest` covers the formats.
+
+### Show only the communication (flag)
+
+`orch.logging.communication-only` in `application.yml` (default `false`; or `ORCH_LOG_COMMUNICATION_ONLY=true`). When `true` the console and the log files contain only the conversation lines plus WARN and ERROR; the `event=` timing lines and the framework output are hidden. Restart the app after changing it.
+Do not use it for load tests: `load-test/report.py` reads the `event=` lines. `logs/conversation.log` always has the conversation lines either way. Implemented by `CommunicationOnlyFilter` (a Logback `TurboFilter`, wired in `logback-spring.xml`); covered by `CommunicationOnlyFilterTest`. See D53.

@@ -4,8 +4,16 @@
   logging.* settings in application.yml), plus one extra file for the readable conversation lines.
   Everything logged to the logger "conversation" (ConversationLog) goes to the main log as before AND
   to logs/conversation.log, where each line is just the text, with its own date and time inside.
+
+  orch.logging.communication-only (application.yml, default false): when true only the conversation
+  lines, warnings and errors are logged (CommunicationOnlyFilter).
 -->
 <configuration>
+	<springProperty scope="context" name="COMMUNICATION_ONLY" source="orch.logging.communication-only" defaultValue="false"/>
+	<turboFilter class="com.hdfc.cern.workfloworch.logging.CommunicationOnlyFilter">
+		<enabled>${COMMUNICATION_ONLY}</enabled>
+	</turboFilter>
+
 	<include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 	<include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
 	<include resource="org/springframework/boot/logging/logback/file-appender.xml"/>
