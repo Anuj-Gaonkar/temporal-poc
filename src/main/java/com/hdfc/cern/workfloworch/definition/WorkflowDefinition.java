@@ -12,6 +12,8 @@ public class WorkflowDefinition {
 
 	private String name;
 	private String description;
+	/** Optional campaign window; without it nothing limits how long the workflow may run. */
+	private Campaign campaign;
 	private String start;
 	private List<StepDefinition> steps;
 }

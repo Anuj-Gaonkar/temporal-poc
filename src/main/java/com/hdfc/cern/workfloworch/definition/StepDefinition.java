@@ -9,7 +9,9 @@ import lombok.Data;
  * <ul>
  *   <li>switch: on, cases, default</li>
  *   <li>activity: activity, params, next</li>
- *   <li>delay: duration, next</li>
+ *   <li>delay: one of duration, fromVar (+ defaultDuration) or untilDay; next</li>
+ *   <li>contact: channel, defaultChannel, text, next</li>
+ *   <li>await-feedback: timeout, next</li>
  *   <li>end: nothing</li>
  * </ul>
  */
@@ -19,6 +21,8 @@ public class StepDefinition {
 	public static final String SWITCH = "switch";
 	public static final String ACTIVITY = "activity";
 	public static final String DELAY = "delay";
+	public static final String CONTACT = "contact";
+	public static final String AWAIT_FEEDBACK = "await-feedback";
 	public static final String END = "end";
 
 	private String id;
@@ -37,7 +41,23 @@ public class StepDefinition {
 
 	// delay
 	private String duration;
+	/** Read the duration from a run variable (reminder.after, feedback.remindAfter). */
+	private String fromVar;
+	/** Used when {@code fromVar} has no value. */
+	private String defaultDuration;
+	/** Wait until Day N of the campaign at the send hour (needs a campaign block). */
+	private Integer untilDay;
 
-	// activity and delay
+	// contact: a literal channel (VOICE, WHATSAPP, SMS) or a path such as reminder.channel
+	private String channel;
+	/** Used when {@code channel} is a path with no value. */
+	private String defaultChannel;
+	/** Script (VOICE) or message text (WHATSAPP, SMS). */
+	private String text;
+
+	// await-feedback: how long to wait for the customer's feedback before it counts as NO_RESPONSE
+	private String timeout;
+
+	// activity, delay, contact and await-feedback
 	private String next;
 }

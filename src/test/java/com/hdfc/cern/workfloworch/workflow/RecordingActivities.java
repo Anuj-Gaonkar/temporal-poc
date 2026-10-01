@@ -10,7 +10,7 @@ import java.util.function.LongSupplier;
 /** Test-only wrapper: runs the real log-only activities and records which ran and at what workflow time. */
 class RecordingActivities implements OrchActivities {
 
-	record Call(String activity, long atMillis) {
+	record Call(String activity, long atMillis, String channel) {
 	}
 
 	private final OrchActivities real = new OrchActivitiesImpl();
@@ -23,13 +23,13 @@ class RecordingActivities implements OrchActivities {
 
 	@Override
 	public void executeVoiceCall(ActivityInput input) {
-		calls.add(new Call(EXECUTE_VOICE_CALL, clock.getAsLong()));
+		calls.add(new Call(EXECUTE_VOICE_CALL, clock.getAsLong(), "VOICE"));
 		real.executeVoiceCall(input);
 	}
 
 	@Override
 	public void sendMessage(ActivityInput input) {
-		calls.add(new Call(SEND_MESSAGE, clock.getAsLong()));
+		calls.add(new Call(SEND_MESSAGE, clock.getAsLong(), input.params().get("channel")));
 		real.sendMessage(input);
 	}
 }

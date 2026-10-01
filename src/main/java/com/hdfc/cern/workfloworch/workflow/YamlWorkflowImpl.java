@@ -5,8 +5,11 @@ import static com.hdfc.cern.workfloworch.logging.LogEvents.line;
 import com.hdfc.cern.workfloworch.activity.ActivityInput;
 import com.hdfc.cern.workfloworch.activity.OrchActivities;
 import com.hdfc.cern.workfloworch.customer.Customer;
-import com.hdfc.cern.workfloworch.definition.CustomerPaths;
+import com.hdfc.cern.workfloworch.definition.CampaignClock;
+import com.hdfc.cern.workfloworch.definition.Channels;
 import com.hdfc.cern.workfloworch.definition.DurationParser;
+import com.hdfc.cern.workfloworch.definition.FeedbackTypes;
+import com.hdfc.cern.workfloworch.definition.RunPaths;
 import com.hdfc.cern.workfloworch.definition.StepDefinition;
 import com.hdfc.cern.workfloworch.definition.WorkflowDefinition;
 import com.hdfc.cern.workfloworch.logging.LogEvents;
@@ -16,6 +19,7 @@ import io.temporal.failure.ApplicationFailure;
 import io.temporal.spring.boot.WorkflowImpl;
 import io.temporal.workflow.Workflow;
 import java.time.Duration;
+import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -24,13 +28,19 @@ import org.slf4j.Logger;
  * Interprets a {@link WorkflowDefinition} with a step pointer: start at the first step, each step
  * decides the next step id, stop at an {@code end} step (the workflow completes normally).
  *
+ * <p>Campaign window: when the definition has a {@code campaign} block, Day 0 is the day the run
+ * started and nothing may be sent or waited for beyond the end of Day {@code maxDays}. A delay or
+ * contact that would cross that line ends the workflow normally (WF_WINDOW_EXPIRED) instead.
+ *
  * <p>Deterministic: no clock, random, IO or database. Time comes from {@link Workflow#currentTimeMillis()},
  * log lines are written only when not replaying.
  */
 @WorkflowImpl(taskQueues = OrchTaskQueue.NAME)
 public class YamlWorkflowImpl implements YamlWorkflow {
 
-	private static final int MAX_TRANSITIONS = 100;
+	private static final int MAX_TRANSITIONS = 500;
+	/** What {@link #execute} returns when the campaign window closed; not a step id. */
+	private static final String WINDOW_EXPIRED = "\u0000window-expired";
 
 	private final Logger log = Workflow.getLogger(YamlWorkflowImpl.class);
 
@@ -41,12 +51,48 @@ public class YamlWorkflowImpl implements YamlWorkflow {
 					.setRetryOptions(RetryOptions.newBuilder().setMaximumAttempts(3).build())
 					.build());
 
+	/** Feedback signals that arrived and have not been consumed by an await-feedback step yet. */
+	private final ArrayDeque<FeedbackSignal> pending = new ArrayDeque<>();
+	/** Run variables the YAML can read (see {@link RunPaths}); only ever holds non-null values. */
+	private final Map<String, String> variables = new HashMap<>();
+	private CampaignClock clock; // null when the definition has no campaign window
+
+	@Override
+	public void feedback(FeedbackSignal signal) {
+		String type = signal == null || signal.type() == null ? "" : signal.type().trim().toUpperCase();
+		if (!FeedbackTypes.ALL.contains(type)) {
+			info(line(LogEvents.WF_FEEDBACK_DROPPED, "workflowId", Workflow.getInfo().getWorkflowId(),
+					"reason", "UNKNOWN_TYPE", "type", signal == null ? null : signal.type()));
+			return;
+		}
+		String remindAfter = signal.remindAfter() == null || signal.remindAfter().isBlank() ? null : signal.remindAfter().trim();
+		if (remindAfter != null) {
+			try {
+				DurationParser.parse(remindAfter);
+			} catch (IllegalArgumentException e) {
+				info(line(LogEvents.WF_FEEDBACK_DROPPED, "workflowId", Workflow.getInfo().getWorkflowId(),
+						"reason", "BAD_REMIND_AFTER_IGNORED", "remindAfter", remindAfter));
+				remindAfter = null;
+			}
+		}
+		String channel = signal.channel() == null || signal.channel().isBlank() ? null : signal.channel().trim().toUpperCase();
+		if (channel != null && !Channels.ALL.contains(channel)) {
+			info(line(LogEvents.WF_FEEDBACK_DROPPED, "workflowId", Workflow.getInfo().getWorkflowId(),
+					"reason", "BAD_CHANNEL_IGNORED", "channel", channel));
+			channel = null;
+		}
+		pending.add(new FeedbackSignal(type, remindAfter, channel));
+	}
+
 	@Override
 	public void run(WorkflowDefinition definition, WorkflowInput input) {
 		String workflowId = Workflow.getInfo().getWorkflowId();
 		Customer customer = input.customer();
 		long startedAt = Workflow.currentTimeMillis();
 		long startLagMs = startedAt - Workflow.getInfo().getRunStartedTimestampMillis();
+		if (definition.getCampaign() != null) {
+			clock = new CampaignClock(definition.getCampaign(), Workflow.getInfo().getRunStartedTimestampMillis());
+		}
 		info(line(LogEvents.WF_STARTED, "workflowId", workflowId, "customerId", customer.customerId(),
 				"channel", customer.initialChannel(), "definition", definition.getName(), "startLagMs", startLagMs));
 
@@ -81,6 +127,11 @@ public class YamlWorkflowImpl implements YamlWorkflow {
 			long enteredAt = Workflow.currentTimeMillis();
 			info(line(LogEvents.WF_STEP_ENTER, "workflowId", workflowId, "stepId", step.getId(), "stepType", step.getType()));
 			String next = execute(step, customer);
+			if (WINDOW_EXPIRED.equals(next)) {
+				info(line(LogEvents.WF_WINDOW_EXPIRED, "workflowId", workflowId, "stepId", step.getId(),
+						"deadline", java.time.Instant.ofEpochMilli(clock.deadline())));
+				return;
+			}
 			info(line(LogEvents.WF_STEP_EXIT, "workflowId", workflowId, "stepId", step.getId(), "stepType", step.getType(),
 					"stepMs", Workflow.currentTimeMillis() - enteredAt));
 			if (next == null) {
@@ -94,7 +145,7 @@ public class YamlWorkflowImpl implements YamlWorkflow {
 	private String execute(StepDefinition step, Customer customer) {
 		switch (step.getType()) {
 			case StepDefinition.SWITCH -> {
-				String value = CustomerPaths.resolve(step.getOn(), customer);
+				String value = RunPaths.resolve(step.getOn(), customer, variables);
 				String target = step.getCases() == null ? null : step.getCases().get(value);
 				if (target == null) {
 					target = step.getDefaultNext();
@@ -105,6 +156,9 @@ public class YamlWorkflowImpl implements YamlWorkflow {
 				return target;
 			}
 			case StepDefinition.ACTIVITY -> {
+				if (windowClosed()) {
+					return WINDOW_EXPIRED;
+				}
 				ActivityInput in = new ActivityInput(step.getId(), customer, step.getParams());
 				switch (step.getActivity()) {
 					case OrchActivities.EXECUTE_VOICE_CALL -> activities.executeVoiceCall(in);
@@ -114,13 +168,138 @@ public class YamlWorkflowImpl implements YamlWorkflow {
 				return step.getNext();
 			}
 			case StepDefinition.DELAY -> {
-				Workflow.sleep(DurationParser.parse(step.getDuration()));
-				return step.getNext();
+				return delay(step);
+			}
+			case StepDefinition.CONTACT -> {
+				return contact(step, customer);
+			}
+			case StepDefinition.AWAIT_FEEDBACK -> {
+				return awaitFeedback(step);
 			}
 			case StepDefinition.END -> {
 				return null;
 			}
 			default -> throw fail("Unknown step type '" + step.getType() + "' in step '" + step.getId() + "'", "UnknownStepType");
+		}
+	}
+
+	private boolean windowClosed() {
+		return clock != null && clock.expired(Workflow.currentTimeMillis());
+	}
+
+	/** Sleeps until the target time, or ends the run when that time is outside the campaign window. */
+	private String delay(StepDefinition step) {
+		long now = Workflow.currentTimeMillis();
+		long target;
+		if (step.getUntilDay() != null) {
+			target = Math.max(now, clock.dayStart(step.getUntilDay()));
+		} else {
+			String text = step.getDuration();
+			if (step.getFromVar() != null) {
+				String fromVar = variables.get(step.getFromVar());
+				text = fromVar != null ? fromVar : step.getDefaultDuration();
+			}
+			Duration wait = DurationParser.parse(text);
+			target = clock == null ? now + wait.toMillis() : clock.target(now, wait);
+		}
+		if (clock != null && clock.expired(target)) {
+			return WINDOW_EXPIRED;
+		}
+		if (target > now) {
+			Workflow.sleep(Duration.ofMillis(target - now));
+		}
+		return step.getNext();
+	}
+
+	/** Contacts the customer on the step's channel: VOICE runs the call activity, WHATSAPP and SMS send a message. */
+	private String contact(StepDefinition step, Customer customer) {
+		if (windowClosed()) {
+			return WINDOW_EXPIRED;
+		}
+		String channel = channelOf(step.getChannel(), customer);
+		if (channel == null) {
+			channel = channelOf(step.getDefaultChannel(), customer);
+		}
+		if (channel == null || !Channels.ALL.contains(channel)) {
+			throw fail("No usable channel for step '" + step.getId() + "' (" + step.getChannel() + "=" + channel + ")", "NoChannel");
+		}
+		// Feedback that arrived before this contact belongs to an older contact: drop it.
+		if (!pending.isEmpty()) {
+			info(line(LogEvents.WF_FEEDBACK_DROPPED, "workflowId", Workflow.getInfo().getWorkflowId(),
+					"reason", "STALE_BEFORE_CONTACT", "count", pending.size()));
+			pending.clear();
+		}
+		Map<String, String> params = new HashMap<>();
+		params.put("channel", channel);
+		params.put("text", step.getText());
+		if (Channels.VOICE.equals(channel)) {
+			params.put("script", step.getText());
+			activities.executeVoiceCall(new ActivityInput(step.getId(), customer, params));
+		} else {
+			activities.sendMessage(new ActivityInput(step.getId(), customer, params));
+		}
+		variables.put(RunPaths.LAST_CHANNEL, channel);
+		return step.getNext();
+	}
+
+	private String channelOf(String literalOrPath, Customer customer) {
+		if (literalOrPath == null) {
+			return null;
+		}
+		return Channels.ALL.contains(literalOrPath) ? literalOrPath : RunPaths.resolve(literalOrPath, customer, variables);
+	}
+
+	/**
+	 * Waits for the customer's feedback. No feedback within the timeout counts as NO_RESPONSE. The wait
+	 * never goes past the end of the campaign window; if the window closes first the run ends.
+	 */
+	private String awaitFeedback(StepDefinition step) {
+		Duration timeout = DurationParser.parse(step.getTimeout());
+		boolean cutByWindow = false;
+		if (clock != null) {
+			long left = clock.deadline() - Workflow.currentTimeMillis();
+			if (left <= 0) {
+				return WINDOW_EXPIRED;
+			}
+			if (left <= timeout.toMillis()) {
+				timeout = Duration.ofMillis(left);
+				cutByWindow = true;
+			}
+		}
+		FeedbackSignal received;
+		if (Workflow.await(timeout, () -> !pending.isEmpty())) {
+			received = pending.poll();
+		} else if (cutByWindow) {
+			return WINDOW_EXPIRED;
+		} else {
+			received = new FeedbackSignal(FeedbackTypes.NO_RESPONSE, null, null);
+		}
+		accept(received, step);
+		return step.getNext();
+	}
+
+	/** Makes the feedback readable by the YAML; a reminder request is remembered for later repeats. */
+	private void accept(FeedbackSignal feedback, StepDefinition step) {
+		put(RunPaths.FEEDBACK_TYPE, feedback.type());
+		put(RunPaths.FEEDBACK_REMIND_AFTER, feedback.remindAfter());
+		put(RunPaths.FEEDBACK_CHANNEL, feedback.channel());
+		if (FeedbackTypes.REMIND_LATER.equals(feedback.type())) {
+			if (feedback.remindAfter() != null) {
+				put(RunPaths.REMINDER_AFTER, feedback.remindAfter());
+			}
+			if (feedback.channel() != null) {
+				put(RunPaths.REMINDER_CHANNEL, feedback.channel());
+			}
+		}
+		info(line(LogEvents.WF_FEEDBACK, "workflowId", Workflow.getInfo().getWorkflowId(), "stepId", step.getId(),
+				"type", feedback.type(), "remindAfter", feedback.remindAfter(), "channel", feedback.channel()));
+	}
+
+	private void put(String key, String value) {
+		if (value == null) {
+			variables.remove(key);
+		} else {
+			variables.put(key, value);
 		}
 	}
 

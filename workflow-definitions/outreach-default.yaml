@@ -1,45 +1,102 @@
 name: OUTREACH_DEFAULT
-description: Default outreach. First step depends on the customer's initial channel; then a common 30-minute wait and follow-up message.
-start: route
+description: Campaign outreach. Day 0 = trigger day; first contact on Day 1 on the customer's DB channel; then feedback decides the next contact. Nothing happens after Day 15.
+start: wait-day-1
+
+# The campaign window. Day 0 is the day the workflow is triggered. Contacts happen on Day 1 .. Day 15 at sendHour
+# (IST) and never after: a reminder that would land after the end of Day 15 is dropped and the workflow ends.
+campaign:
+  maxDays: 15
+  timezone: Asia/Kolkata
+  sendHour: 10
+  # dayLength: 2m     # demo / load test only: one "day" lasts 2 minutes. Leave out for real calendar days.
 
 steps:
-  # --- Step 1: derived from the customer's mode of communication (from the DB) ---
-  - id: route
-    type: switch
-    on: customer.initialChannel        # read from the workflow input, not from an activity
-    cases:
-      VOICE: voice-call
-      WHATSAPP: whatsapp-message
-    # no default: an unexpected channel fails the workflow with a clear message
-
-  - id: voice-call
-    type: activity
-    activity: executeVoiceCall
-    params:
-      script: "Hello, this is HDFC Bank. We are calling about your account."
-    next: wait-30-min
-
-  - id: whatsapp-message
-    type: activity
-    activity: sendMessage
-    params:
-      channel: WHATSAPP
-      text: "Hello from HDFC Bank. Reply here if you need any help."
-    next: wait-30-min
-
-  # --- Default path, same for every customer ---
-  - id: wait-30-min
+  # --- Day 1: first contact, on the channel stored in the DB ---
+  - id: wait-day-1
     type: delay
-    duration: 30m
-    next: follow-up-message
+    untilDay: 1
+    next: first-contact
 
-  - id: follow-up-message
-    type: activity
-    activity: sendMessage
-    params:
-      channel: WHATSAPP
-      text: "Just following up. Reply here if you need any help."
+  - id: first-contact
+    type: contact
+    channel: customer.initialChannel
+    text: "Hello, this is HDFC Bank. We are reaching out about your account. Please let us know how you would like to proceed."
+    next: await-first
+
+  # Feedback arrives via POST /workflows/{id}/feedback. No feedback within the timeout counts as NO_RESPONSE.
+  - id: await-first
+    type: await-feedback
+    timeout: 2h
+    next: route-first
+
+  - id: route-first
+    type: switch
+    on: feedback.type
+    cases:
+      POSITIVE: thank-you
+      REMIND_LATER: wait-reminder
+      INCONCLUSIVE: wait-follow-up
+      NO_RESPONSE: wait-retry
+
+  # --- Positive: thank-you SMS, then done ---
+  - id: thank-you
+    type: contact
+    channel: SMS
+    text: "Thank you from HDFC Bank. We have noted that you will complete the process."
     next: end
+
+  # --- No response: try again on the DB channel (repeats every day until the window closes) ---
+  - id: wait-retry
+    type: delay
+    duration: 1d
+    next: retry-contact
+
+  - id: retry-contact
+    type: contact
+    channel: customer.initialChannel
+    text: "Hello again from HDFC Bank. We could not reach you earlier. Please reply or take our call."
+    next: await-first
+
+  # --- Responded but nothing concrete: talk to them again on the channel they answered on ---
+  - id: wait-follow-up
+    type: delay
+    duration: 1d
+    next: follow-up-contact
+
+  - id: follow-up-contact
+    type: contact
+    channel: last.channel
+    text: "Following up from HDFC Bank on our last conversation. Please let us know how you would like to proceed."
+    next: await-first
+
+  # --- Reminder: the customer's own time and channel win; otherwise 1 day on the DB channel ---
+  - id: wait-reminder
+    type: delay
+    fromVar: reminder.after
+    defaultDuration: 1d
+    next: reminder-contact
+
+  - id: reminder-contact
+    type: contact
+    channel: reminder.channel
+    defaultChannel: customer.initialChannel
+    text: "This is the reminder you asked for from HDFC Bank. Please let us know how you would like to proceed."
+    next: await-reminder
+
+  # No response to a reminder: remind again after the same time on the same channel the customer asked for.
+  - id: await-reminder
+    type: await-feedback
+    timeout: 2h
+    next: route-reminder
+
+  - id: route-reminder
+    type: switch
+    on: feedback.type
+    cases:
+      POSITIVE: thank-you
+      REMIND_LATER: wait-reminder
+      INCONCLUSIVE: wait-follow-up
+      NO_RESPONSE: wait-reminder
 
   - id: end
     type: end

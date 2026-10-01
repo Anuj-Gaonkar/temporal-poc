@@ -17,10 +17,18 @@ public final class LogEvents {
 	public static final String WF_STEP_EXIT = "WF_STEP_EXIT";
 	public static final String WF_COMPLETED = "WF_COMPLETED";
 	public static final String WF_FAILED = "WF_FAILED";
+	public static final String API_FEEDBACK_RECEIVED = "API_FEEDBACK_RECEIVED";
+	public static final String API_FEEDBACK_DONE = "API_FEEDBACK_DONE";
+	public static final String API_FEEDBACK_REJECTED = "API_FEEDBACK_REJECTED";
+	public static final String WF_FEEDBACK = "WF_FEEDBACK";
+	public static final String WF_FEEDBACK_DROPPED = "WF_FEEDBACK_DROPPED";
+	public static final String WF_WINDOW_EXPIRED = "WF_WINDOW_EXPIRED";
 	public static final String ACT_START = "ACT_START";
 	public static final String ACT_DONE = "ACT_DONE";
 	public static final String ACT_FAILED = "ACT_FAILED";
 	public static final String DEFINITIONS_LOADED = "DEFINITIONS_LOADED";
+	public static final String DEFINITIONS_RELOADED = "DEFINITIONS_RELOADED";
+	public static final String DEFINITIONS_RELOAD_FAILED = "DEFINITIONS_RELOAD_FAILED";
 
 	private LogEvents() {
 	}
