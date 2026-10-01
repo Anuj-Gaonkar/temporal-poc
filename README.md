@@ -1,11 +1,16 @@
 # cern-temporal-workflow-orch-service
 
-A small proof of concept that starts a **Temporal workflow per customer, defined in YAML**.
-The service reads the customer's initial channel (`WHATSAPP` or `VOICE`) from Postgres; the YAML's first step depends on it
-(VOICE: call, WHATSAPP: message). Both paths then converge: wait 30 minutes, send a message, end.
-No external service is called: every activity only writes a log line.
+A small proof of concept that starts a **Temporal workflow per customer, defined in YAML**, and runs it as a **15-day campaign**.
 
-Phase 1 is built (this branch). Docs are in [`docs/`](docs/README.md).
+- An external system starts the workflow (`POST /workflows/start`); that day is **Day 0**.
+- On **Day 1** (10:00 IST) the customer is contacted on the channel stored in Postgres (`WHATSAPP` or `VOICE`).
+- The customer's **feedback** then decides the next contact: positive (thank-you SMS, done), remind me later (their own time and channel, or defaults),
+  no response (try again on the DB channel), or answered without a conclusion (talk again on the channel they answered on). An unanswered reminder is repeated with the same time and channel.
+- **Nothing is sent after Day 15.** A reminder that would land beyond it is dropped and the workflow ends.
+- Feedback is sent to `POST /workflows/{workflowId}/feedback` (by hand with Postman, or by a load-test simulator). The service generates none.
+- No external service is called: every activity only writes a log line.
+
+Phase 2 is built (this branch). Docs are in [`docs/`](docs/README.md).
 
 ## Prerequisites
 
@@ -30,6 +35,11 @@ curl -s localhost:8096/workflow-definitions
 curl -s -X POST localhost:8096/workflows/start -H 'Content-Type: application/json' \
      -d '{"customerId":"C1001","definition":"OUTREACH_DEFAULT"}'
 curl -s localhost:8096/workflows/OUTREACH_DEFAULT-C1001
+
+# After the Day 1 contact (see the demo section below for a quick demo), send the customer's feedback:
+curl -s -X POST localhost:8096/workflows/OUTREACH_DEFAULT-C1001/feedback -H 'Content-Type: application/json' \
+     -d '{"type":"REMIND_LATER","remindAfter":"2d","channel":"WHATSAPP"}'
+curl -s -X POST localhost:8096/workflows/OUTREACH_DEFAULT-C1001/feedback -H 'Content-Type: application/json' -d '{"type":"POSITIVE"}'
 ```
 
 Watch it in the Temporal UI: http://localhost:8089 (namespace `default`, task queue `CERN_WORKFLOW_ORCH`).
@@ -71,6 +81,8 @@ Tables are in schema `public`. If you rerun `docker compose up -d` after pulling
 | `GET /workflow-definitions` | Loaded definitions (name, description, step ids) |
 | `POST /workflows/start` | Body `{"customerId","definition"}`. 202, or 400 / 404 `DEFINITION_NOT_FOUND` / 404 `CUSTOMER_NOT_FOUND` / 409 |
 | `POST /workflows/start-all` | Body `{"definition"}`. Starts it for **every** customer in the table, one after another; returns 202 with counts and one result per customer (`STARTED`, `ALREADY_RUNNING`, `FAILED`). 400 / 404 `DEFINITION_NOT_FOUND` |
+| `POST /workflows/{workflowId}/feedback` | Customer feedback for a running workflow (signal). Body `{"type","remindAfter","channel"}`; `type` is `POSITIVE`, `REMIND_LATER`, `NO_RESPONSE` or `INCONCLUSIVE`; `remindAfter` (`2d`, `3h`) and `channel` (`WHATSAPP`, `VOICE`, `SMS`) are optional and only for `REMIND_LATER`. 202, 400 `BAD_REQUEST`, 404 `WORKFLOW_NOT_FOUND`. Send it **after** the contact it answers: feedback that arrives when no contact is waiting is dropped (logged). |
+| `POST /workflow-definitions/reload` | Rescan the YAML folder now. Returns `{changed, removed, errors}`; a broken file keeps its previous version live. Running workflows keep their definition. |
 | `GET /workflows/{workflowId}` | Status via Temporal (RUNNING, COMPLETED, ...) |
 | `GET /customers/{customerId}` | Read-only view of the customer row |
 
@@ -84,14 +96,17 @@ Workflow id is `<definition>-<customerId>`, e.g. `OUTREACH_DEFAULT-C1001`. Start
 
 ## Fast demo
 
-The delay is 30 minutes. To demo quickly, edit `duration: 30m` in `workflow-definitions/outreach-default.yaml` (for example to `20s`)
-and restart the app; there is no hot reload in Phase 1. Do not commit the shortened value.
-Restart the app during the delay to see Temporal keep the timer: the follow-up message is still sent after the restart.
+A real campaign takes days. For a demo or a load test, copy `workflow-definitions/outreach-default.yaml` to another folder, set in the copy
+`dayLength: 20s` under `campaign:` (one "day" lasts 20 seconds, so Day 1 starts 20 s after the trigger and the whole 15-day window lasts about 5 minutes)
+and a short `timeout:` (for example `8s`) on the two `await-feedback` steps, and start the app with
+`ORCH_DEFINITIONS_PATH=/path/to/folder ./mvnw spring-boot:run`. Do not commit a shortened file.
+Edits to the YAML are picked up by the running app within 10 seconds (or call `POST /workflow-definitions/reload`); only workflows started afterwards use them.
+Restart the app while a workflow waits to see Temporal keep the timers.
 
 ## Tests
 
 ```bash
-./mvnw test        # plain unit tests, no Docker needed
+./mvnw test        # plain unit tests (workflow tests use Temporal's time-skipping test server), no Docker needed
 ```
 
 ## Postman
@@ -101,6 +116,7 @@ Import `postman/cern-temporal-workflow-orch-service.postman_collection.json` and
 Customer ids are collection variables. The duplicate (409) request needs the VOICE workflow started just before it to still be running,
 so run it right after "Start workflow, VOICE customer" (with the shipped 30 minute YAML there is plenty of time; with a shortened YAML, be quick).
 To rerun the collection, wait for the earlier workflows to complete first, otherwise the start requests return 409.
+The feedback requests at the end target the VOICE customer's workflow: run them one at a time, each after the contact it answers (with the shipped YAML that is Day 1 at 10:00 IST; for a quick run use the shortened demo copy). Run straight after the start request they return 202 but the workflow drops the feedback, because no contact has been made yet. The 400 and 404 requests work at any time.
 
 ## Load-test data
 
@@ -140,6 +156,7 @@ A run is the window from one `API_START_ALL_RECEIVED` to the next, so keep runs 
 |---|---|
 | `main` | Latest completed phase |
 | `phase-1-channel-routing` | Phase 1 (tag `phase-1-done`) |
-| `phase-1-start-all` | Phase 1 plus the ad hoc `POST /workflows/start-all` endpoint (branched from `phase-1-done`; `main` is unchanged) |
+| `phase-1-start-all` | Phase 1 plus the ad hoc `POST /workflows/start-all` endpoint, IST logs and the load-test tools (branched from `phase-1-done`; `main` is unchanged) |
+| `phase-2-feedback-switch` | Everything above plus Phase 2: the 15-day campaign window, customer feedback and feedback-driven contacts, hot reload of definitions (branched from `phase-1-start-all`; `main` is unchanged until Phase 2 is accepted) |
 
 Demo a phase: `git switch phase-1-channel-routing`. The repo is local only; no remote is configured.
