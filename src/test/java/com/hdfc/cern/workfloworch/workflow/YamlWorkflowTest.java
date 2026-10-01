@@ -3,7 +3,7 @@ package com.hdfc.cern.workfloworch.workflow;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.hdfc.cern.workfloworch.customer.Customer;
-import com.hdfc.cern.workfloworch.definition.DefinitionLoader;
+import com.hdfc.cern.workfloworch.definition.ShippedYaml;
 import com.hdfc.cern.workfloworch.definition.WorkflowDefinition;
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowOptions;
@@ -34,9 +34,7 @@ class YamlWorkflowTest {
 
 	@BeforeEach
 	void setUp() {
-		DefinitionLoader loader = new DefinitionLoader("workflow-definitions");
-		loader.load();
-		definition = loader.find("OUTREACH_DEFAULT").orElseThrow();
+		definition = ShippedYaml.definition();
 
 		env = TestWorkflowEnvironment.newInstance();
 		activities = new RecordingActivities(env::currentTimeMillis);

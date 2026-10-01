@@ -108,3 +108,18 @@ Test-only helper `RecordingActivities` wraps the real log-only activities and re
 Useful derived numbers: time from contact to feedback = `WF_FEEDBACK` timestamp minus the activity business line of the same `workflowId`; contacts per workflow = count of
 `ACT_DONE` per `workflowId`; campaigns that ran out of time = count of `WF_WINDOW_EXPIRED`. `WF_STEP_EXIT.stepMs` of a `delay` or `await-feedback` step is the time spent waiting.
 The `WF_COMPLETED.totalMs` of a campaign is days long unless `dayLength` is used.
+
+## Readable conversation log
+
+Besides the `event=...` lines (unchanged; the load-test report parses them), the service writes human-readable "conversation" lines, built by `ConversationLog` and logged through the logger named `conversation`.
+They replace the Phase 1 business lines (`Voice call: customerId=..` and `Send message: customerId=..`), which nothing parsed.
+
+| Line | Written by | Example |
+|---|---|---|
+| What we sent | the two activities | `Sending WHATSAPP to C1001 (+910000000001) [reminder-contact] at 2026-10-01 12:10:59 IST >> This is the reminder you asked for...` (a VOICE contact says `Calling VOICE ...`) |
+| What the customer replied | the workflow, when feedback is taken | `Customer C1001 replied at 2026-10-01 12:00:59 IST >> REMIND_LATER (in 2d on WHATSAPP)`; a timeout reads `NO_RESPONSE (no feedback within the wait)` |
+| How the campaign ended | the workflow, at the end | `Campaign for C1001 ended at 2026-10-01 12:11:26 IST >> COMPLETED after 16m, 3 contacts (VOICE, WHATSAPP, SMS)`; `WINDOW_EXPIRED` when the 15-day window closed it |
+
+Times are IST with the date, taken from the activity clock or from workflow time (so replays do not change them), and are written only when not replaying.
+`src/main/resources/logback-spring.xml` keeps Spring Boot's console and main file appenders (patterns and rolling still come from `logging.*` in `application.yml`) and adds a second file,
+`logs/conversation.log` (10 MB / 7 days, each line is just the text above). The same lines also appear in the main log. `ConversationLogTest` covers the formats.

@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.hdfc.cern.workfloworch.activity.OrchActivitiesImpl;
 import com.hdfc.cern.workfloworch.api.FeedbackRequest;
-import com.hdfc.cern.workfloworch.definition.DefinitionLoader;
+import com.hdfc.cern.workfloworch.definition.ShippedYaml;
 import com.hdfc.cern.workfloworch.starter.StartRejectedException.Reason;
 import com.hdfc.cern.workfloworch.workflow.OrchTaskQueue;
 import com.hdfc.cern.workfloworch.workflow.WorkflowInput;
@@ -27,8 +27,6 @@ class FeedbackServiceTest {
 
 	@BeforeEach
 	void setUp() {
-		DefinitionLoader loader = new DefinitionLoader("workflow-definitions");
-		loader.load();
 		env = TestWorkflowEnvironment.newInstance();
 		Worker worker = env.newWorker(OrchTaskQueue.NAME);
 		worker.registerWorkflowImplementationTypes(YamlWorkflowImpl.class);
@@ -38,7 +36,7 @@ class FeedbackServiceTest {
 
 		YamlWorkflow workflow = env.getWorkflowClient().newWorkflowStub(YamlWorkflow.class,
 				WorkflowOptions.newBuilder().setWorkflowId("OUTREACH_DEFAULT-C1001").setTaskQueue(OrchTaskQueue.NAME).build());
-		WorkflowClient.start(workflow::run, loader.find("OUTREACH_DEFAULT").orElseThrow(),
+		WorkflowClient.start(workflow::run, ShippedYaml.definition(),
 				new WorkflowInput(new Customer("C1001", "Test One", "+910000000001", "VOICE")));
 	}
 

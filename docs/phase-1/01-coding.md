@@ -94,7 +94,7 @@ INFO level (`WF_FAILED` and `ACT_FAILED` are ERROR). Names are constants in `Log
 | `ACT_FAILED` | activity | as `ACT_DONE` plus `error` |
 | `DEFINITIONS_LOADED` | startup | `count`, `names`, `loadMs` |
 
-The activity business lines have no `event=` prefix: `Voice call: customerId=.. phone=.. script="..."` and `Send message: customerId=.. phone=.. channel=.. text="..."`.
+(Phase 1 only. Phase 2 replaced these lines with the readable conversation lines, see `../phase-2/01-coding.md`.) The activity business lines have no `event=` prefix: `Voice call: customerId=.. phone=.. script="..."` and `Send message: customerId=.. phone=.. channel=.. text="..."`.
 Phone numbers appear only there.
 
 How to compute latencies from the log file:

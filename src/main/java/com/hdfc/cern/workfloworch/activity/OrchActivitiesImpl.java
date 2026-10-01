@@ -2,6 +2,7 @@ package com.hdfc.cern.workfloworch.activity;
 
 import static com.hdfc.cern.workfloworch.logging.LogEvents.line;
 
+import com.hdfc.cern.workfloworch.logging.ConversationLog;
 import com.hdfc.cern.workfloworch.logging.LogEvents;
 import com.hdfc.cern.workfloworch.workflow.OrchTaskQueue;
 import io.temporal.activity.Activity;
@@ -17,18 +18,21 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class OrchActivitiesImpl implements OrchActivities {
 
+	/** Readable "what we sent" lines; also written to logs/conversation.log. */
+	private static final org.slf4j.Logger conversation = org.slf4j.LoggerFactory.getLogger(ConversationLog.LOGGER);
+
 	@Override
 	public void executeVoiceCall(ActivityInput input) {
-		run(OrchActivities.EXECUTE_VOICE_CALL, input, () -> log.info(
-				"Voice call: customerId={} phone={} script=\"{}\"",
-				input.customer().customerId(), input.customer().phone(), param(input, "script")));
+		run(OrchActivities.EXECUTE_VOICE_CALL, input, () -> conversation.info(ConversationLog.contact(
+				"VOICE", input.customer().customerId(), input.customer().phone(), input.stepId(),
+				System.currentTimeMillis(), param(input, "script"))));
 	}
 
 	@Override
 	public void sendMessage(ActivityInput input) {
-		run(OrchActivities.SEND_MESSAGE, input, () -> log.info(
-				"Send message: customerId={} phone={} channel={} text=\"{}\"",
-				input.customer().customerId(), input.customer().phone(), param(input, "channel"), param(input, "text")));
+		run(OrchActivities.SEND_MESSAGE, input, () -> conversation.info(ConversationLog.contact(
+				param(input, "channel"), input.customer().customerId(), input.customer().phone(), input.stepId(),
+				System.currentTimeMillis(), param(input, "text"))));
 	}
 
 	private void run(String name, ActivityInput input, Runnable body) {

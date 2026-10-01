@@ -17,7 +17,7 @@ class DefinitionLoaderTest {
 	@Test
 	void shippedYamlLoads() {
 		DefinitionLoader loader = new DefinitionLoader("workflow-definitions");
-		loader.load();
+		loader.load(); // the working copy itself must be valid, even if shortened for a demo
 
 		WorkflowDefinition def = loader.find("OUTREACH_DEFAULT").orElseThrow();
 		assertThat(def.getStart()).isEqualTo("wait-day-1");
@@ -169,6 +169,6 @@ class DefinitionLoaderTest {
 	}
 
 	private static String valid() throws IOException {
-		return Files.readString(Path.of("workflow-definitions/outreach-default.yaml"));
+		return ShippedYaml.text();
 	}
 }

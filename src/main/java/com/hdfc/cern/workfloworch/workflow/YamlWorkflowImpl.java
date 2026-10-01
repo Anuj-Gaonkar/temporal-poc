@@ -12,6 +12,7 @@ import com.hdfc.cern.workfloworch.definition.FeedbackTypes;
 import com.hdfc.cern.workfloworch.definition.RunPaths;
 import com.hdfc.cern.workfloworch.definition.StepDefinition;
 import com.hdfc.cern.workfloworch.definition.WorkflowDefinition;
+import com.hdfc.cern.workfloworch.logging.ConversationLog;
 import com.hdfc.cern.workfloworch.logging.LogEvents;
 import io.temporal.activity.ActivityOptions;
 import io.temporal.common.RetryOptions;
@@ -56,6 +57,10 @@ public class YamlWorkflowImpl implements YamlWorkflow {
 	/** Run variables the YAML can read (see {@link RunPaths}); only ever holds non-null values. */
 	private final Map<String, String> variables = new HashMap<>();
 	private CampaignClock clock; // null when the definition has no campaign window
+	private final Logger conversation = Workflow.getLogger(ConversationLog.LOGGER);
+	/** Channels of the contacts made so far, for the one-line campaign summary. */
+	private final java.util.List<String> contactChannels = new java.util.ArrayList<>();
+	private boolean windowExpired;
 
 	@Override
 	public void feedback(FeedbackSignal signal) {
@@ -105,8 +110,13 @@ public class YamlWorkflowImpl implements YamlWorkflow {
 			}
 			throw e;
 		}
+		long endedAt = Workflow.currentTimeMillis();
+		if (!Workflow.isReplaying()) {
+			conversation.info(ConversationLog.ended(customer.customerId(), endedAt, windowExpired ? "WINDOW_EXPIRED" : "COMPLETED",
+					endedAt - startedAt, String.join(", ", contactChannels), contactChannels.size()));
+		}
 		info(line(LogEvents.WF_COMPLETED, "workflowId", workflowId, "customerId", customer.customerId(),
-				"totalMs", Workflow.currentTimeMillis() - startedAt));
+				"totalMs", endedAt - startedAt));
 	}
 
 	private void interpret(WorkflowDefinition definition, Customer customer, String workflowId) {
@@ -128,6 +138,7 @@ public class YamlWorkflowImpl implements YamlWorkflow {
 			info(line(LogEvents.WF_STEP_ENTER, "workflowId", workflowId, "stepId", step.getId(), "stepType", step.getType()));
 			String next = execute(step, customer);
 			if (WINDOW_EXPIRED.equals(next)) {
+				windowExpired = true;
 				info(line(LogEvents.WF_WINDOW_EXPIRED, "workflowId", workflowId, "stepId", step.getId(),
 						"deadline", java.time.Instant.ofEpochMilli(clock.deadline())));
 				return;
@@ -174,7 +185,7 @@ public class YamlWorkflowImpl implements YamlWorkflow {
 				return contact(step, customer);
 			}
 			case StepDefinition.AWAIT_FEEDBACK -> {
-				return awaitFeedback(step);
+				return awaitFeedback(step, customer);
 			}
 			case StepDefinition.END -> {
 				return null;
@@ -239,6 +250,7 @@ public class YamlWorkflowImpl implements YamlWorkflow {
 			activities.sendMessage(new ActivityInput(step.getId(), customer, params));
 		}
 		variables.put(RunPaths.LAST_CHANNEL, channel);
+		contactChannels.add(channel);
 		return step.getNext();
 	}
 
@@ -253,7 +265,7 @@ public class YamlWorkflowImpl implements YamlWorkflow {
 	 * Waits for the customer's feedback. No feedback within the timeout counts as NO_RESPONSE. The wait
 	 * never goes past the end of the campaign window; if the window closes first the run ends.
 	 */
-	private String awaitFeedback(StepDefinition step) {
+	private String awaitFeedback(StepDefinition step, Customer customer) {
 		Duration timeout = DurationParser.parse(step.getTimeout());
 		boolean cutByWindow = false;
 		if (clock != null) {
@@ -267,19 +279,21 @@ public class YamlWorkflowImpl implements YamlWorkflow {
 			}
 		}
 		FeedbackSignal received;
+		boolean timedOut = false;
 		if (Workflow.await(timeout, () -> !pending.isEmpty())) {
 			received = pending.poll();
 		} else if (cutByWindow) {
 			return WINDOW_EXPIRED;
 		} else {
 			received = new FeedbackSignal(FeedbackTypes.NO_RESPONSE, null, null);
+			timedOut = true;
 		}
-		accept(received, step);
+		accept(received, step, customer, timedOut);
 		return step.getNext();
 	}
 
 	/** Makes the feedback readable by the YAML; a reminder request is remembered for later repeats. */
-	private void accept(FeedbackSignal feedback, StepDefinition step) {
+	private void accept(FeedbackSignal feedback, StepDefinition step, Customer customer, boolean timedOut) {
 		put(RunPaths.FEEDBACK_TYPE, feedback.type());
 		put(RunPaths.FEEDBACK_REMIND_AFTER, feedback.remindAfter());
 		put(RunPaths.FEEDBACK_CHANNEL, feedback.channel());
@@ -290,6 +304,10 @@ public class YamlWorkflowImpl implements YamlWorkflow {
 			if (feedback.channel() != null) {
 				put(RunPaths.REMINDER_CHANNEL, feedback.channel());
 			}
+		}
+		if (!Workflow.isReplaying()) {
+			conversation.info(ConversationLog.feedback(customer.customerId(), Workflow.currentTimeMillis(), feedback.type(),
+					feedback.remindAfter(), feedback.channel(), timedOut));
 		}
 		info(line(LogEvents.WF_FEEDBACK, "workflowId", Workflow.getInfo().getWorkflowId(), "stepId", step.getId(),
 				"type", feedback.type(), "remindAfter", feedback.remindAfter(), "channel", feedback.channel()));

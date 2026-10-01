@@ -44,6 +44,8 @@ curl -s -X POST localhost:8096/workflows/OUTREACH_DEFAULT-C1001/feedback -H 'Con
 
 Watch it in the Temporal UI: http://localhost:8089 (namespace `default`, task queue `CERN_WORKFLOW_ORCH`).
 Logs go to the console and to `logs/cern-temporal-workflow-orch-service.log`.
+The readable conversation (what we sent, what the customer replied, how the campaign ended, each with date and time) is also in `logs/conversation.log`:
+`tail -f logs/conversation.log`.
 
 Default customers: `C1001`, `C1003`, `C1005` are VOICE; `C1002`, `C1004`, `C1006` are WHATSAPP.
 
