@@ -4,6 +4,8 @@ import com.hdfc.cern.workfloworch.customer.Customer;
 import com.hdfc.cern.workfloworch.customer.CustomerRepository;
 import com.hdfc.cern.workfloworch.definition.DefinitionLoader;
 import com.hdfc.cern.workfloworch.definition.StepDefinition;
+import com.hdfc.cern.workfloworch.starter.FeedbackResult;
+import com.hdfc.cern.workfloworch.starter.FeedbackService;
 import com.hdfc.cern.workfloworch.starter.StartAllResult;
 import com.hdfc.cern.workfloworch.starter.StartResult;
 import com.hdfc.cern.workfloworch.starter.WorkflowStarterService;
@@ -30,13 +32,15 @@ public class OrchController {
 	}
 
 	private final WorkflowStarterService starter;
+	private final FeedbackService feedback;
 	private final DefinitionLoader definitions;
 	private final CustomerRepository customers;
 	private final WorkflowClient workflowClient;
 
-	public OrchController(WorkflowStarterService starter, DefinitionLoader definitions, CustomerRepository customers,
+	public OrchController(WorkflowStarterService starter, FeedbackService feedback, DefinitionLoader definitions, CustomerRepository customers,
 			WorkflowClient workflowClient) {
 		this.starter = starter;
+		this.feedback = feedback;
 		this.definitions = definitions;
 		this.customers = customers;
 		this.workflowClient = workflowClient;
@@ -48,6 +52,18 @@ public class OrchController {
 				.map(d -> new DefinitionSummary(d.getName(), d.getDescription(),
 						d.getSteps().stream().map(StepDefinition::getId).toList()))
 				.toList();
+	}
+
+	/** Rescans the definitions folder now. Valid files go live, broken ones are listed under errors and keep their old version. */
+	@PostMapping("/workflow-definitions/reload")
+	public DefinitionLoader.ReloadResult reloadDefinitions() {
+		return definitions.reload();
+	}
+
+	/** Customer feedback for a running workflow (signal). 202 once delivered; 400 / 404 as for start. */
+	@PostMapping("/workflows/{workflowId}/feedback")
+	public ResponseEntity<FeedbackResult> feedback(@PathVariable String workflowId, @RequestBody FeedbackRequest request) {
+		return ResponseEntity.status(HttpStatus.ACCEPTED).body(feedback.send(workflowId, request));
 	}
 
 	@PostMapping("/workflows/start")

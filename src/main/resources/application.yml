@@ -23,8 +23,11 @@ server:
   port: 8096
 
 orch:
-  # Folder of *.yaml workflow definitions, read once at startup (no hot reload in Phase 1).
+  # Folder of *.yaml workflow definitions. Read at startup (a broken file stops the app), then rescanned
+  # every definitions-reload-seconds (a broken edit is reported and the old version stays live).
   definitions-path: ${ORCH_DEFINITIONS_PATH:./workflow-definitions}
+  definitions-hot-reload: ${ORCH_DEFINITIONS_HOT_RELOAD:true}
+  definitions-reload-seconds: ${ORCH_DEFINITIONS_RELOAD_SECONDS:10}
 
 # ISO-8601 timestamp with milliseconds in IST (+05:30), thread, logger, and the MDC ids set by API/activity code.
 # Console and rolling file use the same pattern so the load scripts can parse either.

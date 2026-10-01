@@ -9,7 +9,8 @@ public class StartRejectedException extends RuntimeException {
 		BAD_REQUEST(HttpStatus.BAD_REQUEST),
 		DEFINITION_NOT_FOUND(HttpStatus.NOT_FOUND),
 		CUSTOMER_NOT_FOUND(HttpStatus.NOT_FOUND),
-		ALREADY_RUNNING(HttpStatus.CONFLICT);
+		ALREADY_RUNNING(HttpStatus.CONFLICT),
+		WORKFLOW_NOT_FOUND(HttpStatus.NOT_FOUND);
 
 		private final HttpStatus status;
 
